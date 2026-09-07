@@ -17,41 +17,71 @@ How it works:
 
 | Tool | What it's for |
 |---|---|
-| **XAMPP** | MySQL database (Apache is optional) |
-| **PHP 8+** | Runs the website |
-| **Node.js** (optional) | Builds Tailwind CSS (a ready-made CSS file is already included, so usually not needed) |
+| **XAMPP** | Apache (serves phpMyAdmin) + MySQL (the database) — run both |
+| **PHP 8+** | Runs the website via its own command |
+| **Node.js + npm** | Installs and builds **Tailwind CSS** (required — the site's styling) |
 
 ---
 
-## Setup Guide — follows these 5 steps
+## Setup Guide
 
-> If you are using **XAMPP**, its built-in PHP already has MySQL support, so the site works out of the box. If you use a **separately installed PHP** and it shows errors about `mysqli`, jump to the [Troubleshooting](#troubleshooting) section at the bottom.
+> You will run **Apache and MySQL normally** from XAMPP (Apache is used for phpMyAdmin), and separately run the PHP project **with its own command on a different port** — so they never conflict. If you use a separately installed PHP and it shows errors about `mysqli`, jump to the [Troubleshooting](#troubleshooting) section at the bottom.
 
 ### Step 1 — Put the project on your computer
 
-Download / clone the repository and open the folder. For example:
+Download / clone the repository anywhere you like and open the folder.
 
-- On **XAMPP**, a nice place is `C:\xampp\htdocs\eventrify` (Windows) or `~/lampp/htdocs/eventrify` (Linux).
-
-*(You don't have to put it there — anywhere works.)*
+> Do **not** put it inside `C:\xampp\htdocs\eventrify` / `htdocs` — you will run the project with your own PHP command instead, so it works from any folder.
 
 ---
 
-### Step 2 — Start MySQL
+### Step 2 — Install Tailwind CSS (must do before running)
+
+The project uses **Tailwind CSS** for all styling. You need to install its packages and build the CSS file **before** starting the site.
+
+1. Make sure **Node.js** is installed:
+   - Windows / Linux / macOS: check in a terminal with:
+     ```bash
+     node --version
+     npm --version
+     ```
+   - If it says "command not found", download Node.js from <https://nodejs.org> (the LTS version), install it, and re-open your terminal.
+
+2. From the **project folder**, install the Tailwind packages:
+   ```bash
+   npm install
+   ```
+   (Windows / Linux / macOS — same command.)
+
+3. Build the CSS file once:
+   ```bash
+   npm run build
+   ```
+   This creates `public/assets/css/app.css` from `src/css/app.css`.
+
+4. Verify the file exists:
+   - Look for `public/assets/css/app.css` in the project — if it's there, Tailwind is ready.
+
+
+---
+
+### Step 3 — Start Apache and MySQL
 
 GUI way (recommended):
 
 1. Open the **XAMPP Control Panel**.
-2. Press the **Start** button on the **MySQL** row (the green **Start** button appears).
-3. Leave it running. (Do **not** need Apache.)
+2. Press the **Start** button on the **Apache** row and on the **MySQL** row (both turn green).
+3. Leave both running.
+
+> **Apache** is needed so that **phpMyAdmin** works (the SQL dashboard). **MySQL** is the database the project connects to.
 
 ---
 
-### Step 3 — Create the database
+### Step 4 — Create the database
 
 GUI way (recommended):
 
-1. Click the **Admin** button next to MySQL in XAMPP → this opens **phpMyAdmin** in your browser.
+1. Click the **Admin** button next to the MySQL row in XAMPP → this opens **phpMyAdmin** in your browser (requires Apache to be running).
 2. Near the top, click the **Import** tab.
 3. Press **Choose File**, pick **`database/database.sql`** from the project folder.
 4. Press the blue **Import** button at the bottom.
@@ -59,7 +89,7 @@ GUI way (recommended):
 
 That's it — the database **`eventrify`** with tables and sample data is now created.
 
-> Terminal way (if you prefer):
+> Terminal way (if you prefer - ):
 >
 > **Windows** (PowerShell, from the project folder):
 > ```powershell
@@ -79,7 +109,7 @@ That's it — the database **`eventrify`** with tables and sample data is now cr
 
 ---
 
-### Step 4 — Create the `.env` file
+### Step 5 — Create the `.env` file
 
 The project needs a small config file. Look for **`.env.example`** in the project folder:
 
@@ -103,7 +133,7 @@ APP_URL=http://localhost:8000
 
 ---
 
-### Step 5 — Run the website
+### Step 6 — Run the website
 
 Open a terminal (Command Prompt / PowerShell on Windows) **inside the project folder** and run:
 
@@ -134,6 +164,8 @@ http://localhost:8000
 You should see the **public events landing page**. 🎉
 
 > Tip: keep this terminal open — that **is** your website server. Press `Ctrl+C` to stop it.
+>
+> This runs **alongside Apache** which stays on port 80 — so at the same time you can open phpMyAdmin at `http://localhost/phpmyadmin` and the project at `http://localhost:8000` without any conflict.
 
 ---
 
@@ -183,25 +215,10 @@ eventrify/
 │   ├── auth/        # login, register, logout
 │   ├── dashboard-a/ # admin pages
 │   └── dashboard-b/ # club pages
-├── src/css/         # Tailwind source (only if you edit styles)
+├── src/css/         # Tailwind source CSS (input — builds public/assets/css/app.css)
 ├── database/        # database.sql + seed.sql
 └── .env             # your local settings (don't share this file)
 ```
-
----
-
-## Tailwind CSS (only needed if you edit styles)
-
-The pre-built CSS (`public/assets/css/app.css`) is already included, so **you can skip this**.
-
-If you want to change the design (commands are the same on Windows and Linux):
-
-```bash
-npm install
-npm run dev     # watches changes and rebuilds CSS automatically
-```
-
-Run this **in a second terminal** next to the `php -S` server. On Windows use Command Prompt/PowerShell, on Linux use a terminal — the commands are identical.
 
 ---
 
@@ -230,9 +247,9 @@ MySQL couldn't be reached over the missing Unix socket (common on Linux when mix
 
 `.env` values are wrong, or XAMPP MySQL isn't running. Open XAMPP → press **Start** on MySQL, double-check `DB_USER` / `DB_PASSWORD`.
 
-**White page / no styling**
+**White page / no styling / "npm not found"**
 
-Run `npm run build` once to generate the CSS, or re-clone the repo (the `public/assets/css/app.css` file must exist).
+Tailwind wasn't installed/built yet. From the project folder run `npm install`, then `npm run build` to generate `public/assets/css/app.css`, and restart the `php -S` server. If `npm` is missing, install Node.js first (see Step 2).
 
 **Port 8000 already in use**
 
