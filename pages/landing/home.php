@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-$pageTitle = 'Home';
+$pageTitle = 'Home'; 
 
 $recentEvents = $db->query("
     SELECT e.*, c.club_name
