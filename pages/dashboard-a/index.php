@@ -8,11 +8,13 @@ requireAdmin();
 
 $pageTitle = 'Dashboard';
 $activePage = 'dashboard';
+$totalReports = 15 ;
+$totalApplications = 10 ;
 
 $totalUsers = $db->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
 $totalEvents = $db->query("SELECT COUNT(*) as count FROM events")->fetch_assoc()['count'];
 $newUsers = $db->query("SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = CURDATE()")->fetch_assoc()['count'];
-$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM registrations")->fetch_assoc()['count'];
+$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations")->fetch_assoc()['count'];
 
 require BASE_PATH . '/app/layouts/dashboard-a/header.php';
 require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
@@ -227,24 +229,24 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
 
                 $rows = [];
 
-                while ($report = $recentReports->fetch_assoc()) {
+                // while ($report = $recentReports->fetch_assoc()) {
 
-                    $reportName = $report['title']
-                        ?? $report['name']
-                        ?? 'Report #' . ($report['id'] ?? '');
+                //     $reportName = $report['title']
+                //         ?? $report['name']
+                //         ?? 'Report #' . ($report['id'] ?? '');
 
-                    $reportStatus = $report['status']
-                        ?? 'Pending';
+                //     $reportStatus = $report['status']
+                //         ?? 'Pending';
 
-                    $reportCreated = $report['created_at']
-                        ?? null;
+                //     $reportCreated = $report['created_at']
+                //         ?? null;
 
-                    $rows[] = [
-                        e($reportName),
-                        ucfirst(e($reportStatus)),
-                        $reportCreated ? formatDate($reportCreated) : '-',
-                    ];
-                }
+                //     $rows[] = [
+                //         e($reportName),
+                //         ucfirst(e($reportStatus)),
+                //         $reportCreated ? formatDate($reportCreated) : '-',
+                //     ];
+                // }
 
                 $emptyMessage = 'No reports yet.';
 

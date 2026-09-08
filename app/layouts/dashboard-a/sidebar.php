@@ -102,7 +102,7 @@
 
 
             
-            <a
+            <!-- <a
                 href="<?= url('/admin/settings') ?>"
                 class="flex items-center px-3 py-2 text-sm font-medium text-gray-300 rounded-lg hover:bg-sidebar-light hover:text-white transition-colors <?= ($activePage ?? '') === 'settings' ? 'bg-sidebar-light text-white' : '' ?>"
             >
@@ -129,7 +129,7 @@
 
                 Settings
 
-            </a>
+            </a> -->
 
         </nav>
 

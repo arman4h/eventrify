@@ -7,8 +7,9 @@ $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = trim($requestUri, '/');
 
 $routes = [
-    ''                               => '/pages/landing/index.php',
-    'home'                           => '/pages/landing/index.php',
+    ''                               => '/pages/landing/home.php',
+    'home'                           => '/pages/landing/home.php',
+    'events'                         => '/pages/landing/index.php',
     'event'                          => '/pages/landing/event.php',
 
     'login'                          => '/pages/auth/login.php',

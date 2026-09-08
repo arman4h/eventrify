@@ -3,15 +3,17 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireAuth();
+requireClubUser();
 
 $pageTitle = 'Overview';
 $activePage = 'overview';
 
-$totalEvents = $db->query("SELECT COUNT(*) as count FROM events")->fetch_assoc()['count'];
-$upcomingEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE start_time >= CURDATE()")->fetch_assoc()['count'];
-$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations")->fetch_assoc()['count'];
-$featuredEvents = $db->query("SELECT * FROM events ORDER BY start_time ASC LIMIT 4");
+$clubId = (int) currentUser()['club_id'];
+
+$totalEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE club_id = $clubId")->fetch_assoc()['count'];
+$upcomingEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE club_id = $clubId AND start_time >= NOW() AND status != 'cancelled'")->fetch_assoc()['count'];
+$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = $clubId")->fetch_assoc()['count'];
+$featuredEvents = $db->query("SELECT * FROM events WHERE club_id = $clubId ORDER BY start_time ASC LIMIT 4");
 
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
 require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
@@ -76,7 +78,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <div class="flex items-center gap-4 text-xs text-gray-500 mb-4">
                     <span class="inline-flex items-center">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <?= formatDate($event['event_date']) ?>
+                        <?= formatDate($event['start_time']) ?>
                     </span>
                     <span class="inline-flex items-center">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -84,9 +86,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     </span>
                 </div>
                 <div class="flex gap-2">
-                    <a href="<?= url('/club/events/edit?event_id=' . $event['id']) ?>" class="text-xs font-medium text-primary-600 hover:text-primary-700">Edit</a>
+                    <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="text-xs font-medium text-primary-600 hover:text-primary-700">Edit</a>
                     <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
-                        <input type="hidden" name="event_id" value="<?= (int) $event['id'] ?>">
+                        <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
                         <button type="submit" class="text-xs font-medium text-red-600 hover:text-red-700" data-confirm="Delete this event?">Delete</button>
                     </form>
                 </div>

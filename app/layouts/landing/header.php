@@ -18,7 +18,7 @@ $pageTitle = $pageTitle ?? APP_NAME;
                 <?= e(APP_NAME) ?>
             </a>
             <nav class="flex items-center gap-4">
-                <a href="<?= url('/') ?>" class="text-sm font-medium text-gray-600 hover:text-gray-900">Events</a>
+                <a href="<?= url('/events') ?>" class="text-sm font-medium text-gray-600 hover:text-gray-900">Events</a>
                 <?php if (isLoggedIn()): ?>
                     <span class="text-sm text-gray-500">Hi, <?= e(currentUser()['name']) ?></span>
                     <?php if (isSystemAdmin()): ?>
