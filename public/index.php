@@ -15,16 +15,16 @@ $routes = [
     'register'                       => '/pages/auth/register.php',
     'logout'                         => '/pages/auth/logout.php',
 
-    // Dashboard A (Admin / Users Management)
     'admin'                          => '/pages/dashboard-a/index.php',
-    'admin/users'                    => '/pages/dashboard-a/users/index.php',
-    'admin/users/create'             => '/pages/dashboard-a/users/create.php',
-    'admin/users/edit'               => '/pages/dashboard-a/users/edit.php',
-    'admin/users/delete'             => '/pages/dashboard-a/users/delete.php',
+
+   
+    'admin/applications'             => '/pages/dashboard-a/applications/index.php',
+
     'admin/reports'                  => '/pages/dashboard-a/reports/index.php',
+
     'admin/settings'                 => '/pages/dashboard-a/settings/index.php',
 
-    // Dashboard B (Club / Events Management)
+
     'club'                           => '/pages/dashboard-b/index.php',
     'club/events'                    => '/pages/dashboard-b/events/index.php',
     'club/events/create'             => '/pages/dashboard-b/events/create.php',
