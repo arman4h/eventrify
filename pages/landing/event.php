@@ -22,6 +22,7 @@ if (!$event) {
 
 $pageTitle = $event['title'];
 
+<<<<<<< HEAD
 $errors = [];
 
 if (isPost() && post('action') === 'register_event') {
@@ -124,6 +125,39 @@ if (isPost() && post('action') === 'register_event') {
             redirect('/event?event_id=' . $eventId);
         } else {
             $errors[] = 'Registration failed. Please try again.';
+=======
+$registeredCount = 0;
+$countStmt = $db->prepare("SELECT COUNT(*) as total FROM registrations WHERE event_id = ? AND status = 'registered'");
+if ($countStmt) {
+    $countStmt->bind_param('i', $eventId);
+    $countStmt->execute();
+    $countResult = $countStmt->get_result()->fetch_assoc();
+    $registeredCount = (int)$countResult['total'];
+}
+
+$totalCapacity = (int)$event['capacity'];
+$availableSeats = $totalCapacity - $registeredCount;
+if ($availableSeats < 0) {
+    $availableSeats = 0;
+}
+
+$isAlreadyRegistered = false;
+$isAlreadyWaitlisted = false;
+
+if (isLoggedIn() && currentUserRole() === 'student') {
+    $studentId = $_SESSION['user_id'] ?? 0;
+    
+    $checkReg = $db->prepare("SELECT status FROM registrations WHERE event_id = ? AND student_id = ?");
+    $checkReg->bind_param('ii', $eventId, $studentId);
+    $checkReg->execute();
+    $regResult = $checkReg->get_result()->fetch_assoc();
+    
+    if ($regResult) {
+        if ($regResult['status'] === 'registered') {
+            $isAlreadyRegistered = true;
+        } elseif ($regResult['status'] === 'waitlisted') {
+            $isAlreadyWaitlisted = true;
+>>>>>>> 2a383e58e40a56eb11f24442d52feade91b84c50
         }
     }
 }
@@ -133,12 +167,17 @@ require BASE_PATH . '/app/layouts/landing/header.php';
 
 <article class="card p-8 max-w-3xl mx-auto mb-8">
     <div class="flex items-center justify-between mb-4">
+<<<<<<< HEAD
         <?php if ($event['category']): ?>
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700"><?= e($event['category']) ?></span>
         <?php else: ?>
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Event</span>
         <?php endif; ?>
         <a href="<?= url('/events') ?>" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to all events</a>
+=======
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 uppercase tracking-wide"><?= ucfirst(e($event['status'])) ?></span>
+        <a href="<?= url('/') ?>" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to all events</a>
+>>>>>>> 2a383e58e40a56eb11f24442d52feade91b84c50
     </div>
 
     <h1 class="text-3xl font-extrabold text-gray-900 mb-2"><?= e($event['title']) ?></h1>
@@ -148,20 +187,30 @@ require BASE_PATH . '/app/layouts/landing/header.php';
 
     <dl class="grid sm:grid-cols-2 gap-4 mb-6 text-sm">
         <div class="p-4 bg-gray-50 rounded-lg">
+<<<<<<< HEAD
             <dt class="text-gray-500">Start Time</dt>
             <dd class="font-semibold text-gray-900 mt-1"><?= formatDate($event['start_time'], 'M d, Y h:i A') ?></dd>
         </div>
         <div class="p-4 bg-gray-50 rounded-lg">
             <dt class="text-gray-500">End Time</dt>
             <dd class="font-semibold text-gray-900 mt-1"><?= $event['end_time'] ? formatDate($event['end_time'], 'M d, Y h:i A') : '—' ?></dd>
+=======
+            <dt class="text-gray-500 font-medium">📅 Date &amp; Time</dt>
+            <dd class="font-bold text-gray-900 mt-1"><?= formatDate($event['event_date'], 'M d, Y h:i A') ?></dd>
+>>>>>>> 2a383e58e40a56eb11f24442d52feade91b84c50
         </div>
         <div class="p-4 bg-gray-50 rounded-lg">
-            <dt class="text-gray-500">Venue</dt>
-            <dd class="font-semibold text-gray-900 mt-1"><?= e($event['venue']) ?></dd>
+            <dt class="text-gray-500 font-medium">📍 Venue</dt>
+            <dd class="font-bold text-gray-900 mt-1"><?= e($event['venue']) ?></dd>
         </div>
-        <div class="p-4 bg-gray-50 rounded-lg">
-            <dt class="text-gray-500">Capacity</dt>
-            <dd class="font-semibold text-gray-900 mt-1"><?= (int) $event['capacity'] ?> seats</dd>
+        <div class="p-4 bg-gray-50 rounded-lg sm:col-span-2">
+            <dt class="text-gray-500 font-medium">👥 Registration Status</dt>
+            <dd class="font-bold text-gray-900 mt-1 flex items-center gap-2">
+                <span><?= $availableSeats ?> / <?= $totalCapacity ?> Seats Available</span>
+                <?php if ($availableSeats === 0): ?>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Waitlist Active</span>
+                <?php endif; ?>
+            </dd>
         </div>
         <?php if ($event['registration_deadline']): ?>
         <div class="p-4 bg-gray-50 rounded-lg sm:col-span-2">
@@ -174,6 +223,7 @@ require BASE_PATH . '/app/layouts/landing/header.php';
     <h2 class="text-lg font-semibold text-gray-900 mb-2">About this event</h2>
     <p class="text-gray-700 leading-relaxed mb-4"><?= e($event['description']) ?></p>
 
+<<<<<<< HEAD
     <div class="border-t border-gray-200 pt-6">
         <a href="<?= url('/events') ?>" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to all events</a>
     </div>
@@ -255,3 +305,13 @@ require BASE_PATH . '/app/layouts/landing/header.php';
 </section>
 
 <?php require BASE_PATH . '/app/layouts/landing/footer.php'; ?>
+=======
+    <div class="flex items-center gap-3 border-t border-gray-200 pt-6">
+        <?php if (isLoggedIn()): ?>
+
+        <?php endif; ?>
+    </div>
+</article>
+
+<?php require BASE_PATH . '/app/layouts/landing/footer.php'; ?>
+>>>>>>> 2a383e58e40a56eb11f24442d52feade91b84c50
