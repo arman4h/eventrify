@@ -21,10 +21,16 @@ $pageTitle = $pageTitle ?? APP_NAME;
                 <a href="<?= url('/') ?>" class="text-sm font-medium text-gray-600 hover:text-gray-900">Events</a>
                 <?php if (isLoggedIn()): ?>
                     <span class="text-sm text-gray-500">Hi, <?= e(currentUser()['name']) ?></span>
-                    <a href="<?= url(currentUserRole() === 'admin' ? '/admin' : '/club') ?>" class="btn-primary">Dashboard</a>
+                    <?php if (isSystemAdmin()): ?>
+                        <a href="<?= url('/admin') ?>" class="btn-primary">Dashboard</a>
+                    <?php elseif (isClubUser()): ?>
+                        <a href="<?= url('/club') ?>" class="btn-primary">Dashboard</a>
+                    <?php else: ?>
+                        <a href="<?= url('/logout') ?>" class="btn-secondary">Logout</a>
+                    <?php endif; ?>
                 <?php else: ?>
                     <a href="<?= url('/login') ?>" class="btn-primary">Login</a>
-                    <a href="<?= url('/register') ?>" class="btn-secondary">Sign Up</a>
+                    <a href="<?= url('/register-student') ?>" class="btn-secondary">Sign Up</a>
                 <?php endif; ?>
             </nav>
         </div>

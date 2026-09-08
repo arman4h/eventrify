@@ -9,36 +9,64 @@ if (isLoggedIn()) {
 require_once BASE_PATH . '/app/config/database.php';
 
 $error = null;
+$activeTab = post('tab', get('tab', 'student'));
+
+if ($activeTab !== 'club' && $activeTab !== 'student') {
+    $activeTab = 'student';
+}
 
 if (isPost()) {
     $email = post('email');
     $password = post('password');
+    $role  = post('role');
 
     if ($email === '' || $password === '') {
         $error = 'Please fill in all fields.';
     } else {
-        $stmt = $db->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
-        $stmt->bind_param('s', $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $user = $result->fetch_assoc();
+        if ($role === 'club') {
+            // ---------- CLUB PERSON LOGIN ----------
+            $stmt = $db->prepare("SELECT * FROM club_users WHERE email = ? LIMIT 1");
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $clubUser = $stmt->get_result()->fetch_assoc();
 
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = (int) $user['id'];
-            $_SESSION['user'] = [
-                'id' => (int) $user['id'],
-                'name' => $user['name'],
-                'email' => $user['email'],
-                'role' => $user['role'],
-            ];
+            if ($clubUser && password_verify($password, $clubUser['password_hash'])) {
+                if ($clubUser['status'] !== 'active') {
+                    $error = 'Your account is not active. Please contact your club admin.';
+                } else {
+                    // Check the club's approval status
+                    $clubStmt = $db->prepare("SELECT club_name, status FROM clubs WHERE club_id = ? LIMIT 1");
+                    $clubStmt->bind_param('i', $clubUser['club_id']);
+                    $clubStmt->execute();
+                    $club = $clubStmt->get_result()->fetch_assoc();
 
-            if ($user['role'] === 'admin') {
-                redirect('/admin');
+                    if (!$club || $club['status'] !== 'approved') {
+                        $error = 'Your club has not been approved yet. Please wait for admin approval.';
+                    } else {
+                        loginClubUser($clubUser);
+                        redirect('/club');
+                    }
+                }
+            } else {
+                $error = 'Email or password is incorrect.';
             }
-
-            redirect('/club');
         } else {
-            $error = 'Email or password is incorrect.';
+            // ---------- STUDENT LOGIN ----------
+            $stmt = $db->prepare("SELECT * FROM students WHERE email = ? LIMIT 1");
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $student = $stmt->get_result()->fetch_assoc();
+
+            if ($student && password_verify($password, $student['password_hash'])) {
+                if (!$student['is_active']) {
+                    $error = 'Your account is deactivated. Please contact support.';
+                } else {
+                    loginStudent($student);
+                    redirect('/');
+                }
+            } else {
+                $error = 'Email or password is incorrect.';
+            }
         }
     }
 }
@@ -65,30 +93,68 @@ if (isPost()) {
                 <p class="text-sm text-gray-500 mt-1">Sign in to your account</p>
             </div>
 
-            <?php
-            $alertType = 'error';
-            $alertMessage = $error;
-            require_once BASE_PATH . '/app/components/alert.php';
-            ?>
+            <!-- Tabs -->
+            <div class="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-lg mb-6">
+                <a href="<?= url('/login?tab=student') ?>"
+                   class="py-2 text-sm font-semibold text-center rounded-md transition <?= $activeTab === 'student' ? 'bg-white text-primary-600 shadow' : 'text-gray-500 hover:text-gray-700' ?>">
+                    Student
+                </a>
+                <a href="<?= url('/login?tab=club') ?>"
+                   class="py-2 text-sm font-semibold text-center rounded-md transition <?= $activeTab === 'club' ? 'bg-white text-primary-600 shadow' : 'text-gray-500 hover:text-gray-700' ?>">
+                    Club Person
+                </a>
+            </div>
 
-            <form method="POST" action="<?= url('/login') ?>" class="space-y-5">
+            <?php if ($error): ?>
+            <div class="mb-4">
+                <?php
+                $alertType = 'error';
+                $alertMessage = $error;
+                require_once BASE_PATH . '/app/components/alert.php';
+                ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($activeTab === 'student'): ?>
+            <!-- STUDENT LOGIN -->
+            <form method="POST" action="<?= url('/login?tab=student') ?>" class="space-y-5">
+                <input type="hidden" name="role" value="student">
                 <div>
-                    <label class="label">Email Address</label>
-                    <input type="email" name="email" class="input" placeholder="you@example.com" value="<?= e(old('email')) ?>" required>
+                    <label class="label">University Email</label>
+                    <input type="email" name="email" class="input" placeholder="student@uiu.ac.bd" value="<?= e(post('email')) ?>" required autocomplete="username">
                 </div>
-
                 <div>
                     <label class="label">Password</label>
-                    <input type="password" name="password" class="input" placeholder="••••••••" required>
+                    <input type="password" name="password" class="input" placeholder="••••••••" required autocomplete="current-password">
                 </div>
-
-                <button type="submit" class="btn-primary w-full">Sign In</button>
+                <button type="submit" class="btn-primary w-full">Log In</button>
             </form>
-
             <p class="text-center text-sm text-gray-500 mt-6">
-                Don't have an account?
-                <a href="<?= url('/register') ?>" class="font-medium text-primary-600 hover:text-primary-500">Register</a>
+                New student? Register with your university info.
+                <a href="<?= url('/register-student') ?>" class="font-medium text-primary-600 hover:text-primary-500">Register</a>
             </p>
+            <?php else: ?>
+            <!-- CLUB PERSON LOGIN -->
+            <form method="POST" action="<?= url('/login?tab=club') ?>" class="space-y-5">
+                <input type="hidden" name="role" value="club">
+                <div>
+                    <label class="label">Club Email</label>
+                    <input type="email" name="email" class="input" placeholder="club@example.com" value="<?= e(post('email')) ?>" required autocomplete="username">
+                </div>
+                <div>
+                    <label class="label">Password</label>
+                    <input type="password" name="password" class="input" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn-primary w-full">Log In</button>
+            </form>
+            <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                <span class="font-semibold">Note:</span> A club cannot use the site directly. You must submit an application to register your club, then wait for admin approval before you can log in.
+            </div>
+            <p class="text-center text-sm text-gray-500 mt-4">
+                Want to register your club?
+                <a href="<?= url('/register-club') ?>" class="font-medium text-primary-600 hover:text-primary-500">Apply now</a>
+            </p>
+            <?php endif; ?>
         </div>
     </div>
     <script src="<?= url('/assets/js/app.js') ?>"></script>

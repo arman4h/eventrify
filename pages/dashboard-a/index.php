@@ -9,19 +9,10 @@ requireAdmin();
 $pageTitle = 'Dashboard';
 $activePage = 'dashboard';
 
-
-$totalReports = $db->query(
-    "SELECT COUNT(*) as count FROM tasks"
-)->fetch_assoc()['count'];
-
-$totalUsers = $db->query(
-    "SELECT COUNT(*) as count FROM users"
-)->fetch_assoc()['count'];
-
-$totalApplications = $db->query(
-    "SELECT COUNT(*) as count FROM registrations"
-)->fetch_assoc()['count'];
-
+$totalUsers = $db->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
+$totalEvents = $db->query("SELECT COUNT(*) as count FROM events")->fetch_assoc()['count'];
+$newUsers = $db->query("SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = CURDATE()")->fetch_assoc()['count'];
+$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM registrations")->fetch_assoc()['count'];
 
 require BASE_PATH . '/app/layouts/dashboard-a/header.php';
 require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';

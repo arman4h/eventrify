@@ -12,8 +12,12 @@ $routes = [
     'event'                          => '/pages/landing/event.php',
 
     'login'                          => '/pages/auth/login.php',
-    'register'                       => '/pages/auth/register.php',
+    'register-student'               => '/pages/auth/register-student.php',
+    'register-club'                  => '/pages/auth/register-club.php',
     'logout'                         => '/pages/auth/logout.php',
+
+    // Admin auth
+    'admin/login'                    => '/pages/auth/admin-login.php',
 
     'admin'                          => '/pages/dashboard-a/index.php',
 
@@ -35,6 +39,12 @@ $routes = [
 ];
 
 if (array_key_exists($uri, $routes)) {
+    // Guard admin dashboard routes: must be a logged-in system admin
+    $isAdminRoute = str_starts_with($uri, 'admin') && $uri !== 'admin/login';
+    if ($isAdminRoute && !isSystemAdmin()) {
+        redirect('/admin/login');
+    }
+
     require BASE_PATH . $routes[$uri];
 } else {
     redirect('/');

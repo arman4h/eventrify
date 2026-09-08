@@ -1,11 +1,3 @@
--- ============================================
--- Eventrify - Database Schema
--- DBMS Lab Project
--- ============================================
-
-CREATE DATABASE IF NOT EXISTS eventrify CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE eventrify;
 
 -- -----------------------------------------------------
 -- Table: users
