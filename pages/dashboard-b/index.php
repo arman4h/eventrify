@@ -9,9 +9,9 @@ $pageTitle = 'Overview';
 $activePage = 'overview';
 
 $totalEvents = $db->query("SELECT COUNT(*) as count FROM events")->fetch_assoc()['count'];
-$upcomingEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE event_date >= CURDATE()")->fetch_assoc()['count'];
-$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM registrations")->fetch_assoc()['count'];
-$featuredEvents = $db->query("SELECT * FROM events ORDER BY event_date ASC LIMIT 4");
+$upcomingEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE start_time >= CURDATE()")->fetch_assoc()['count'];
+$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations")->fetch_assoc()['count'];
+$featuredEvents = $db->query("SELECT * FROM events ORDER BY start_time ASC LIMIT 4");
 
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
 require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';

@@ -3,30 +3,31 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireAuth();
+requireClubUser();
 
 $pageTitle = 'Events';
 $activePage = 'events';
 
+$clubId = (int) currentUser()['club_id'];
 $search = get('search');
-$where = '';
+$where = 'WHERE club_id = ' . $clubId;
 $params = '';
 
 if ($search !== '') {
-    $where = "WHERE title LIKE ? OR description LIKE ? OR venue LIKE ?";
+    $where .= " AND (title LIKE ? OR description LIKE ? OR venue LIKE ?)";
     $params = "%$search%";
 }
 
 $stmt = null;
 
-if ($where !== '') {
-    $stmt = $db->prepare("SELECT * FROM events $where ORDER BY event_date DESC");
+if ($search !== '') {
+    $stmt = $db->prepare("SELECT * FROM events $where ORDER BY start_time DESC");
     $like = "%$search%";
     $stmt->bind_param('sss', $like, $like, $like);
     $stmt->execute();
     $events = $stmt->get_result();
 } else {
-    $events = $db->query("SELECT * FROM events ORDER BY event_date DESC");
+    $events = $db->query("SELECT * FROM events $where ORDER BY start_time DESC");
 }
 
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
@@ -88,17 +89,17 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                             <div class="font-medium text-gray-900"><?= e($event['title']) ?></div>
                             <div class="text-xs text-gray-500"><?= e(substr($event['description'], 0, 60)) ?>...</div>
                         </td>
-                        <td class="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"><?= formatDate($event['event_date']) ?></td>
+                        <td class="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"><?= formatDate($event['start_time']) ?></td>
                         <td class="px-6 py-4 text-sm text-gray-700"><?= e($event['venue']) ?></td>
                         <td class="px-6 py-4 text-sm text-gray-700"><?= (int) $event['capacity'] ?></td>
                         <td class="px-6 py-4">
                             <?php
-                            $status = $event['status'] ?? 'upcoming';
+                            $status = $event['status'] ?? 'draft';
                             $badge = match ($status) {
-                                'upcoming' => 'bg-blue-50 text-blue-700',
-                                'ongoing'  => 'bg-emerald-50 text-emerald-700',
-                                'completed' => 'bg-gray-100 text-gray-600',
+                                'draft'     => 'bg-gray-100 text-gray-600',
+                                'published' => 'bg-emerald-50 text-emerald-700',
                                 'cancelled' => 'bg-red-50 text-red-700',
+                                'completed' => 'bg-blue-50 text-blue-700',
                                 default => 'bg-gray-100 text-gray-600',
                             };
                             ?>
@@ -106,9 +107,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex gap-3">
-                                <a href="<?= url('/club/events/edit?event_id=' . $event['id']) ?>" class="text-primary-600 hover:text-primary-700 font-medium text-sm">Edit</a>
+                                <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="text-primary-600 hover:text-primary-700 font-medium text-sm">Edit</a>
                                 <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
-                                    <input type="hidden" name="event_id" value="<?= (int) $event['id'] ?>">
+                                    <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
                                     <button type="submit" class="text-red-600 hover:text-red-700 font-medium text-sm" data-confirm="Delete this event?">Delete</button>
                                 </form>
                             </div>

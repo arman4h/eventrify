@@ -3,14 +3,15 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireAuth();
+requireClubUser();
 
 $pageTitle = 'Edit Event';
 $activePage = 'events';
 
 $eventId = (int) get('event_id');
-$stmt = $db->prepare("SELECT * FROM events WHERE id = ?");
-$stmt->bind_param('i', $eventId);
+$clubId = (int) currentUser()['club_id'];
+$stmt = $db->prepare("SELECT * FROM events WHERE event_id = ? AND club_id = ?");
+$stmt->bind_param('ii', $eventId, $clubId);
 $stmt->execute();
 $result = $stmt->get_result();
 $event = $result->fetch_assoc();
@@ -22,20 +23,55 @@ if (!$event) {
 $errors = [];
 
 if (isPost()) {
-    $title = post('title');
-    $description = post('description');
-    $venue = post('venue');
-    $eventDate = post('event_date');
-    $capacity = (int) post('capacity');
-    $status = post('status');
+    $title                = post('title');
+    $description          = post('description');
+    $category             = post('category');
+    $venue                = post('venue');
+    $startTime            = post('start_time');
+    $endTime              = post('end_time');
+    $registrationDeadline = post('registration_deadline');
+    $capacity             = (int) post('capacity');
+    $status               = post('status');
 
-    if ($title === '' || $description === '' || $venue === '' || $eventDate === '') {
-        $errors[] = 'All fields are required.';
+    $allowed = ['draft', 'published', 'cancelled', 'completed'];
+    if (!in_array($status, $allowed, true)) {
+        $status = 'draft';
+    }
+
+    if ($title === '' || $venue === '' || $startTime === '') {
+        $errors[] = 'Title, venue, and start time are required.';
+    }
+
+    if ($endTime !== '' && $endTime < $startTime) {
+        $errors[] = 'End time cannot be before the start time.';
     }
 
     if (empty($errors)) {
-        $stmt = $db->prepare("UPDATE events SET title = ?, description = ?, venue = ?, event_date = ?, capacity = ?, status = ? WHERE id = ?");
-        $stmt->bind_param('ssssisi', $title, $description, $venue, $eventDate, $capacity, $status, $eventId);
+        $stmt = $db->prepare("
+            UPDATE events
+            SET title = ?, description = ?, category = ?, venue = ?,
+                start_time = ?, end_time = ?, registration_deadline = ?,
+                capacity = ?, status = ?
+            WHERE event_id = ? AND club_id = ?
+        ");
+
+        $end = $endTime !== '' ? $endTime : null;
+        $deadline = $registrationDeadline !== '' ? $registrationDeadline : null;
+
+        $stmt->bind_param(
+            'sssssssssii',
+            $title,
+            $description,
+            $category,
+            $venue,
+            $startTime,
+            $end,
+            $deadline,
+            $capacity,
+            $status,
+            $eventId,
+            $clubId
+        );
 
         if ($stmt->execute()) {
             $_SESSION['flash']['success'] = 'Event updated successfully.';
@@ -82,27 +118,46 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <textarea name="description" rows="4" class="input" required><?= e(isPost() ? post('description') : $event['description']) ?></textarea>
             </div>
 
-            <div>
-                <label class="label">Venue</label>
-                <input type="text" name="venue" class="input" value="<?= e(isPost() ? post('venue') : $event['venue']) ?>" required>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="label">Category</label>
+                    <input type="text" name="category" class="input" value="<?= e(isPost() ? post('category') : $event['category']) ?>">
+                </div>
+
+                <div>
+                    <label class="label">Venue</label>
+                    <input type="text" name="venue" class="input" value="<?= e(isPost() ? post('venue') : $event['venue']) ?>" required>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="label">Event Date</label>
-                    <input type="datetime-local" name="event_date" class="input" value="<?= e(isPost() ? post('event_date') : $event['event_date']) ?>" required>
+                    <label class="label">Start Time</label>
+                    <input type="datetime-local" name="start_time" class="input" value="<?= e(isPost() ? post('start_time') : $event['start_time']) ?>" required>
+                </div>
+
+                <div>
+                    <label class="label">End Time</label>
+                    <input type="datetime-local" name="end_time" class="input" value="<?= e(isPost() ? post('end_time') : $event['end_time']) ?>">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="label">Registration Deadline</label>
+                    <input type="datetime-local" name="registration_deadline" class="input" value="<?= e(isPost() ? post('registration_deadline') : $event['registration_deadline']) ?>">
                 </div>
 
                 <div>
                     <label class="label">Capacity</label>
-                    <input type="number" name="capacity" class="input" value="<?= isPost() ? post('capacity') : (int) $event['capacity'] ?>" min="1" required>
+                    <input type="number" name="capacity" class="input" value="<?= isPost() ? post('capacity') : (int) $event['capacity'] ?>" min="0" required>
                 </div>
             </div>
 
             <div>
                 <label class="label">Status</label>
                 <select name="status" class="input">
-                    <?php foreach (['upcoming', 'ongoing', 'completed', 'cancelled'] as $s): ?>
+                    <?php foreach (['draft', 'published', 'cancelled', 'completed'] as $s): ?>
                     <option value="<?= $s ?>" <?= $event['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
                     <?php endforeach; ?>
                 </select>

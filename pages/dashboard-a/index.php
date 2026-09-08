@@ -12,7 +12,7 @@ $activePage = 'dashboard';
 $totalUsers = $db->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
 $totalEvents = $db->query("SELECT COUNT(*) as count FROM events")->fetch_assoc()['count'];
 $newUsers = $db->query("SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = CURDATE()")->fetch_assoc()['count'];
-$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM registrations")->fetch_assoc()['count'];
+$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations")->fetch_assoc()['count'];
 
 require BASE_PATH . '/app/layouts/dashboard-a/header.php';
 require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';

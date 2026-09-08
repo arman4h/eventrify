@@ -47,10 +47,16 @@ require BASE_PATH . '/app/layouts/landing/header.php';
 
     <div class="flex items-center gap-3 border-t border-gray-200 pt-6">
         <?php if (isLoggedIn()): ?>
-            <a href="<?= url(currentUserRole() === 'admin' ? '/admin' : '/club') ?>" class="btn-primary">Go to Dashboard</a>
+            <?php if (isSystemAdmin()): ?>
+                <a href="<?= url('/admin') ?>" class="btn-primary">Go to Dashboard</a>
+            <?php elseif (isClubUser()): ?>
+                <a href="<?= url('/club') ?>" class="btn-primary">Go to Dashboard</a>
+            <?php else: ?>
+                <a href="<?= url('/') ?>" class="btn-primary">Back to Events</a>
+            <?php endif; ?>
         <?php else: ?>
             <a href="<?= url('/login') ?>" class="btn-primary">Login to Participate</a>
-            <a href="<?= url('/register') ?>" class="btn-secondary">Create an Account</a>
+            <a href="<?= url('/register-student') ?>" class="btn-secondary">Create an Account</a>
         <?php endif; ?>
     </div>
 </article>
