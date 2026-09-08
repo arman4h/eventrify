@@ -12,19 +12,23 @@ $routes = [
     'event'                          => '/pages/landing/event.php',
 
     'login'                          => '/pages/auth/login.php',
-    'register'                       => '/pages/auth/register.php',
+    'register-student'               => '/pages/auth/register-student.php',
+    'register-club'                  => '/pages/auth/register-club.php',
     'logout'                         => '/pages/auth/logout.php',
 
-    // Dashboard A (Admin / Users Management)
+    // Admin auth
+    'admin/login'                    => '/pages/auth/admin-login.php',
+
     'admin'                          => '/pages/dashboard-a/index.php',
-    'admin/users'                    => '/pages/dashboard-a/users/index.php',
-    'admin/users/create'             => '/pages/dashboard-a/users/create.php',
-    'admin/users/edit'               => '/pages/dashboard-a/users/edit.php',
-    'admin/users/delete'             => '/pages/dashboard-a/users/delete.php',
+
+   
+    'admin/applications'             => '/pages/dashboard-a/applications/index.php',
+
     'admin/reports'                  => '/pages/dashboard-a/reports/index.php',
+
     'admin/settings'                 => '/pages/dashboard-a/settings/index.php',
 
-    // Dashboard B (Club / Events Management)
+
     'club'                           => '/pages/dashboard-b/index.php',
     'club/events'                    => '/pages/dashboard-b/events/index.php',
     'club/events/create'             => '/pages/dashboard-b/events/create.php',
@@ -35,6 +39,12 @@ $routes = [
 ];
 
 if (array_key_exists($uri, $routes)) {
+    // Guard admin dashboard routes: must be a logged-in system admin
+    $isAdminRoute = str_starts_with($uri, 'admin') && $uri !== 'admin/login';
+    if ($isAdminRoute && !isSystemAdmin()) {
+        redirect('/admin/login');
+    }
+
     require BASE_PATH . $routes[$uri];
 } else {
     redirect('/');

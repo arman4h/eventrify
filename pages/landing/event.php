@@ -87,26 +87,7 @@ require BASE_PATH . '/app/layouts/landing/header.php';
 
     <div class="flex items-center gap-3 border-t border-gray-200 pt-6">
         <?php if (isLoggedIn()): ?>
-            <?php if (currentUserRole() === 'student'): ?>
-                
-                <?php if ($isAlreadyRegistered): ?>
-                    <button class="btn-secondary text-green-700 cursor-not-allowed font-semibold" disabled>✓ Already Registered</button>
-                <?php elseif ($isAlreadyWaitlisted): ?>
-                    <button class="btn-secondary text-yellow-700 cursor-not-allowed font-semibold" disabled>⌛ On Waitlist</button>
-                <?php else: ?>
-                    <?php if ($availableSeats > 0): ?>
-                        <a href="<?= url('/register-event?event_id=' . $eventId) ?>" class="btn-primary px-6 py-2.5 rounded-xl font-semibold shadow-sm">Register Now</a>
-                    <?php else: ?>
-                        <a href="<?= url('/join-waitlist?event_id=' . $eventId) ?>" class="bg-yellow-500 hover:bg-yellow-600 text-gray-900 px-6 py-2.5 rounded-xl font-semibold shadow-sm transition-colors">Join Waitlist</a>
-                    <?php endif; ?>
-                <?php endif; ?>
 
-            <?php else: ?>
-                <a href="<?= url(currentUserRole() === 'admin' ? '/admin' : '/club') ?>" class="btn-primary px-6 py-2.5 rounded-xl font-semibold shadow-sm">Go to Dashboard</a>
-            <?php endif; ?>
-        <?php else: ?>
-            <a href="<?= url('/login') ?>" class="btn-primary px-6 py-2.5 rounded-xl font-semibold shadow-sm">Login to Participate</a>
-            <a href="<?= url('/register') ?>" class="btn-secondary px-6 py-2.5 rounded-xl font-semibold shadow-sm">Create an Account</a>
         <?php endif; ?>
     </div>
 </article>

@@ -83,10 +83,31 @@ function requireAuth(): void
     }
 }
 
-function requireAdmin(): void
+function requireStudent(): void
 {
     requireAuth();
-    if (!isAdmin()) {
+    if (!isStudent()) {
         redirect('/');
     }
+}
+
+function requireClubUser(): void
+{
+    requireAuth();
+    if (!isClubUser()) {
+        redirect('/');
+    }
+}
+
+function requireSystemAdmin(): void
+{
+    requireAuth();
+    if (!isSystemAdmin()) {
+        redirect('/admin/login');
+    }
+}
+
+function requireAdmin(): void
+{
+    requireSystemAdmin();
 }
