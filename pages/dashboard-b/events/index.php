@@ -9,116 +9,154 @@ $pageTitle = 'Events';
 $activePage = 'events';
 
 $clubId = (int) currentUser()['club_id'];
-$search = get('search');
-$where = 'WHERE club_id = ' . $clubId;
-$params = '';
+$search = get('q');
+$page = max(1, (int) get('page', 1));
+$perPage = 10;
+$offset = ($page - 1) * $perPage;
+
+$baseQuery = "FROM events WHERE club_id = ?";
+$countQuery = "SELECT COUNT(*) as c $baseQuery";
+$dataQuery = "SELECT * $baseQuery ORDER BY start_time DESC";
+
+$params = [$clubId];
+$types = 'i';
 
 if ($search !== '') {
-    $where .= " AND (title LIKE ? OR description LIKE ? OR venue LIKE ?)";
-    $params = "%$search%";
-}
-
-$stmt = null;
-
-if ($search !== '') {
-    $stmt = $db->prepare("SELECT * FROM events $where ORDER BY start_time DESC");
+    $whereExtra = " AND (title LIKE ? OR description LIKE ? OR venue LIKE ?)";
+    $countQuery .= $whereExtra;
+    $dataQuery .= $whereExtra;
     $like = "%$search%";
-    $stmt->bind_param('sss', $like, $like, $like);
-    $stmt->execute();
-    $events = $stmt->get_result();
-} else {
-    $events = $db->query("SELECT * FROM events $where ORDER BY start_time DESC");
+    $params[] = $like;
+    $params[] = $like;
+    $params[] = $like;
+    $types .= 'sss';
 }
+
+$countStmt = $db->prepare($countQuery);
+$countStmt->bind_param($types, ...$params);
+$countStmt->execute();
+$totalRows = (int) $countStmt->get_result()->fetch_assoc()['c'];
+$totalPages = max(1, (int) ceil($totalRows / $perPage));
+
+$dataQuery .= " LIMIT $perPage OFFSET $offset";
+$dataStmt = $db->prepare($dataQuery);
+$dataStmt->bind_param($types, ...$params);
+$dataStmt->execute();
+$events = $dataStmt->get_result();
+
+$baseUrl = url('/club/events') . ($search !== '' ? '?q=' . urlencode($search) : '');
 
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
 require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 ?>
 <div class="flex-1 flex flex-col overflow-hidden">
-<?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
-<main class="flex-1 overflow-y-auto p-6 md:p-8">
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h2 class="text-xl font-bold text-gray-900">Events</h2>
-            <p class="text-sm text-gray-500 mt-1">Create and manage club events</p>
-        </div>
-        <a href="<?= url('/club/events/create') ?>" class="btn-primary">Create Event</a>
-    </div>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <?php
+        $alertType = flash('success') ? 'success' : 'error';
+        $alertMessage = flash('success') ?: flash('error');
+        if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
+        ?>
 
-    <?php
-    $alertType = 'success';
-    $alertMessage = flash('success');
-    require BASE_PATH . '/app/components/alert.php';
-    $alertType = 'error';
-    $alertMessage = flash('error');
-    require BASE_PATH . '/app/components/alert.php';
-    ?>
-
-    <div class="card overflow-hidden">
-        <div class="p-4 border-b border-gray-200">
-            <form method="GET" action="<?= url('/club/events') ?>" class="flex gap-3">
-                <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search events..." class="input max-w-sm">
-                <button type="submit" class="btn-secondary">Search</button>
-                <?php if ($search !== ''): ?>
-                <a href="<?= url('/club/events') ?>" class="btn-secondary">Clear</a>
-                <?php endif; ?>
-            </form>
+        <div class="page-header">
+            <div>
+                <h2 class="page-title">Events</h2>
+                <p class="page-subtitle">Create and manage club events</p>
+            </div>
+            <a href="<?= url('/club/events/create') ?>" class="btn-primary">
+                <?= icon('plus', 'w-4 h-4') ?> Create Event
+            </a>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="table-header">
-                    <tr>
-                        <th class="px-6 py-3">Title</th>
-                        <th class="px-6 py-3">Date</th>
-                        <th class="px-6 py-3">Venue</th>
-                        <th class="px-6 py-3">Capacity</th>
-                        <th class="px-6 py-3">Status</th>
-                        <th class="px-6 py-3">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <?php if ($events->num_rows === 0): ?>
-                    <tr>
-                        <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">
-                            No events found.
-                        </td>
-                    </tr>
-                    <?php else: while ($event = $events->fetch_assoc()): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4">
-                            <div class="font-medium text-gray-900"><?= e($event['title']) ?></div>
-                            <div class="text-xs text-gray-500"><?= e(substr($event['description'], 0, 60)) ?>...</div>
-                        </td>
-                        <td class="px-6 py-4 text-sm text-gray-700 whitespace-nowrap"><?= formatDate($event['start_time']) ?></td>
-                        <td class="px-6 py-4 text-sm text-gray-700"><?= e($event['venue']) ?></td>
-                        <td class="px-6 py-4 text-sm text-gray-700"><?= (int) $event['capacity'] ?></td>
-                        <td class="px-6 py-4">
-                            <?php
-                            $status = $event['status'] ?? 'draft';
-                            $badge = match ($status) {
-                                'draft'     => 'bg-gray-100 text-gray-600',
-                                'published' => 'bg-emerald-50 text-emerald-700',
-                                'cancelled' => 'bg-red-50 text-red-700',
-                                'completed' => 'bg-blue-50 text-blue-700',
-                                default => 'bg-gray-100 text-gray-600',
-                            };
-                            ?>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?= $badge ?>"><?= ucfirst(e($status)) ?></span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="flex gap-3">
-                                <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="text-primary-600 hover:text-primary-700 font-medium text-sm">Edit</a>
-                                <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
-                                    <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
-                                    <button type="submit" class="text-red-600 hover:text-red-700 font-medium text-sm" data-confirm="Delete this event?">Delete</button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endwhile; endif; ?>
-                </tbody>
-            </table>
+        <div class="card overflow-hidden">
+            <div class="p-4 border-b border-gray-200">
+                <form method="GET" action="<?= url('/club/events') ?>" class="flex gap-3">
+                    <div class="relative flex-1 max-w-sm">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><?= icon('search', 'w-4 h-4') ?></span>
+                        <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search events..." class="input pl-10">
+                    </div>
+                    <button type="submit" class="btn-secondary btn-sm">Search</button>
+                    <?php if ($search !== ''): ?>
+                        <a href="<?= url('/club/events') ?>" class="btn-ghost btn-sm">Clear</a>
+                    <?php endif; ?>
+                </form>
+            </div>
+
+            <?php if ($events->num_rows === 0): ?>
+                <?php
+                $emptyIcon = 'calendar';
+                $emptyTitle = 'No events found';
+                $emptyText = $search !== '' ? 'Try a different search term.' : 'Create your first event to get started.';
+                $emptyHref = url('/club/events/create');
+                $emptyAction = 'Create Event';
+                require BASE_PATH . '/app/components/empty-state.php';
+                ?>
+            <?php else: ?>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Venue</th>
+                                <th>Capacity</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($event = $events->fetch_assoc()): ?>
+                            <tr>
+                                <td>
+                                    <div class="font-medium text-gray-900"><?= e($event['title']) ?></div>
+                                    <div class="text-xs text-gray-500"><?= e(mb_strimwidth($event['description'] ?? '', 0, 60, '…')) ?></div>
+                                </td>
+                                <td class="whitespace-nowrap text-sm text-gray-700"><?= formatDate($event['start_time']) ?></td>
+                                <td class="text-sm text-gray-700"><?= e($event['venue']) ?></td>
+                                <td class="text-sm text-gray-700"><?= (int) $event['capacity'] ?></td>
+                                <td>
+                                    <?php
+                                    $status = $event['status'] ?? 'draft';
+                                    $badge = match($status) {
+                                        'draft' => 'badge-neutral',
+                                        'published' => 'badge-success',
+                                        'cancelled' => 'badge-danger',
+                                        'completed' => 'badge-info',
+                                        default => 'badge-neutral',
+                                    };
+                                    ?>
+                                    <span class="<?= $badge ?>"><?= ucfirst(e($status)) ?></span>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex gap-2">
+                                        <a href="<?= url('/club/events/manage?event_id=' . $event['event_id']) ?>" class="btn-ghost btn-sm">
+                                            <?= icon('eye', 'w-4 h-4') ?> Manage
+                                        </a>
+                                        <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="btn-ghost btn-sm">
+                                            <?= icon('edit', 'w-4 h-4') ?> Edit
+                                        </a>
+                                        <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
+                                            <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
+                                            <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this event?">
+                                                <?= icon('trash', 'w-4 h-4') ?>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php
+                $totalPages = $totalPages;
+                $currentPage = $page;
+                $baseUrl = $baseUrl;
+                require BASE_PATH . '/app/components/pagination.php';
+                ?>
+            <?php endif; ?>
         </div>
-    </div>
-</main>
-<?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+    </main>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+</div>

@@ -106,6 +106,7 @@ CREATE TABLE events (
     title                  VARCHAR(150) NOT NULL,
     description            TEXT,
     category               VARCHAR(50),
+    poster                 LONGTEXT,                          -- base64-encoded event poster image
     venue                  VARCHAR(150),
     start_time             DATETIME NOT NULL,
     end_time               DATETIME NOT NULL,

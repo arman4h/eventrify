@@ -9,32 +9,38 @@ if (isLoggedIn()) {
 require_once BASE_PATH . '/app/config/database.php';
 
 $errors = [];
+$registeredEmail = null;
 
 if (isPost()) {
     $universityId = post('university_id');
     $fullName     = post('full_name');
     $email        = post('email');
     $department   = post('department');
+    $program      = post('program');
     $batch        = post('batch');
     $phone        = post('phone');
-    $interests    = post('interests');
     $password     = post('password');
     $confirm      = post('confirm_password');
+    $agree        = isset($_POST['agree']);
 
-    if ($universityId === '' || $fullName === '' || $email === '' || $password === '') {
+    if ($fullName === '' || $email === '' || $universityId === '' || $department === '' || $password === '' || $confirm === '') {
         $errors[] = 'Please fill in all required fields.';
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid email address.';
+    }
+
+    if (strlen($password) < 8) {
+        $errors[] = 'Password must be at least 8 characters.';
     }
 
     if ($password !== $confirm) {
         $errors[] = 'Passwords do not match.';
     }
 
-    if (strlen($password) < 6) {
-        $errors[] = 'Password must be at least 6 characters.';
-    }
-
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please enter a valid email address.';
+    if (!$agree) {
+        $errors[] = 'You must agree to the Terms and Privacy Policy to register.';
     }
 
     if (empty($errors)) {
@@ -58,6 +64,8 @@ if (isPost()) {
 
         if (empty($errors)) {
             $hashed = password_hash($password, PASSWORD_DEFAULT);
+            $interests = $program;
+
             $stmt = $db->prepare("
                 INSERT INTO students (university_id, full_name, email, password_hash, department, batch, phone, interests, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
@@ -75,115 +83,122 @@ if (isPost()) {
             );
 
             if ($stmt->execute()) {
+                $registeredEmail = $email;
                 setOld([]);
-                $_SESSION['flash']['success'] = 'Registration successful! Please log in.';
-                redirect('/login');
             } else {
                 $errors[] = 'Registration failed. Please try again.';
             }
         }
     }
 }
+
+$pageTitle = 'Create Account';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Registration | <?= e(APP_NAME) ?></title>
+    <title><?= e($pageTitle) ?> | <?= e(APP_NAME) ?></title>
     <link rel="stylesheet" href="<?= url('/assets/css/app.css') ?>">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-indigo-900 py-10">
-    <div class="w-full max-w-lg p-8">
-        <div class="bg-white rounded-2xl shadow-2xl p-8">
-            <div class="text-center mb-8">
-                <div class="w-14 h-14 mx-auto bg-primary-600 rounded-xl flex items-center justify-center mb-4">
-                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-gray-900">Student Registration</h1>
-                <p class="text-sm text-gray-500 mt-1">Register with your university information</p>
-            </div>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col items-center justify-center px-4 py-12">
+    <a href="<?= url('/') ?>" class="flex items-center gap-2.5 mb-8">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600 text-white text-lg font-bold">E</span>
+        <span class="text-2xl font-bold tracking-tight text-gray-900">Eventrify</span>
+    </a>
 
-            <?php if (flash('success')): ?>
-            <div class="mb-4">
-                <?php
-                $alertType = 'success';
-                $alertMessage = flash('success');
-                require_once BASE_PATH . '/app/components/alert.php';
-                ?>
-            </div>
+    <div class="w-full max-w-lg">
+        <div class="card p-6 sm:p-8">
+            <?php if ($registeredEmail !== null): ?>
+                <div class="flex flex-col items-center text-center py-4">
+                    <span class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 mb-4"><?= icon('check-circle', 'w-7 h-7') ?></span>
+                    <h1 class="text-xl font-bold text-gray-900">Verify your email</h1>
+                    <p class="text-sm text-gray-500 mt-2 max-w-sm">We sent a verification link to <span class="font-medium text-gray-700"><?= e($registeredEmail) ?></span>. Please check your inbox to activate your Eventrify account.</p>
+                    <a href="<?= url('/login') ?>" class="btn-primary mt-6">Go to Login</a>
+                </div>
+            <?php else: ?>
+                <div class="mb-6">
+                    <h1 class="text-xl font-bold text-gray-900">Create your account</h1>
+                    <p class="text-sm text-gray-500 mt-1">Register for events, track attendance, and more.</p>
+                </div>
+
+                <?php foreach ($errors as $error): ?>
+                    <div class="alert alert-error mb-4" role="alert">
+                        <div class="flex items-start gap-3">
+                            <span class="mt-0.5 shrink-0"><?= icon('x-circle', 'w-5 h-5') ?></span>
+                            <p class="text-sm"><?= e($error) ?></p>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+
+                <form method="POST" action="<?= url('/register-student') ?>" class="space-y-4">
+                    <div class="form-group">
+                        <label for="full_name" class="label label-required">Full Name</label>
+                        <input type="text" id="full_name" name="full_name" class="input" placeholder="John Doe" value="<?= e(post('full_name')) ?>" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email" class="label label-required">University Email</label>
+                        <input type="email" id="email" name="email" class="input" placeholder="your.name@university.edu" value="<?= e(post('email')) ?>" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="university_id" class="label label-required">Student ID</label>
+                        <input type="text" id="university_id" name="university_id" class="input" placeholder="e.g. 0112211234" value="<?= e(post('university_id')) ?>" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="department" class="label label-required">Department</label>
+                        <input type="text" id="department" name="department" class="input" placeholder="Computer Science & Engineering" value="<?= e(post('department')) ?>" required>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label for="program" class="label">Program</label>
+                            <input type="text" id="program" name="program" class="input" placeholder="BSc in CSE" value="<?= e(post('program')) ?>">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="batch" class="label">Trimester/Semester</label>
+                            <input type="text" id="batch" name="batch" class="input" placeholder="e.g. Summer 2025" value="<?= e(post('batch')) ?>">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone" class="label">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label for="password" class="label label-required">Password</label>
+                            <input type="password" id="password" name="password" class="input" placeholder="At least 8 characters" minlength="8" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirm_password" class="label label-required">Confirm Password</label>
+                            <input type="password" id="confirm_password" name="confirm_password" class="input" placeholder="Re-enter password" minlength="8" required>
+                        </div>
+                    </div>
+
+                    <label class="flex items-start gap-2.5 cursor-pointer pt-1">
+                        <input type="checkbox" name="agree" class="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" <?= isset($_POST['agree']) ? 'checked' : '' ?> required>
+                        <span class="text-sm text-gray-600">I agree to the Terms and Privacy Policy</span>
+                    </label>
+
+                    <button type="submit" class="btn-primary btn-lg w-full">Create Student Account</button>
+                </form>
+
+                <p class="text-center text-sm text-gray-500 mt-6">Already have an account? <a href="<?= url('/login') ?>" class="font-medium text-blue-600 hover:text-blue-500">Log in</a></p>
             <?php endif; ?>
-
-            <?php foreach ($errors as $error): ?>
-            <div class="mb-2">
-                <?php
-                $alertType = 'error';
-                $alertMessage = $error;
-                require BASE_PATH . '/app/components/alert.php';
-                ?>
-            </div>
-            <?php endforeach; ?>
-
-            <form method="POST" action="<?= url('/register-student') ?>" class="space-y-4">
-                <div>
-                    <label class="label">University ID <span class="text-red-500">*</span></label>
-                    <input type="text" name="university_id" class="input" placeholder="e.g. 011 231 456" value="<?= e(post('university_id')) ?>" required>
-                </div>
-
-                <div>
-                    <label class="label">Full Name <span class="text-red-500">*</span></label>
-                    <input type="text" name="full_name" class="input" placeholder="John Doe" value="<?= e(post('full_name')) ?>" required>
-                </div>
-
-                <div>
-                    <label class="label">University Email <span class="text-red-500">*</span></label>
-                    <input type="email" name="email" class="input" placeholder="student@uiu.ac.bd" value="<?= e(post('email')) ?>" required>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="label">Department</label>
-                        <input type="text" name="department" class="input" placeholder="CSE" value="<?= e(post('department')) ?>">
-                    </div>
-                    <div>
-                        <label class="label">Batch</label>
-                        <input type="text" name="batch" class="input" placeholder="e.g. 55" value="<?= e(post('batch')) ?>">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="label">Phone Number</label>
-                    <input type="text" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>">
-                </div>
-
-                <div>
-                    <label class="label">Interests <span class="text-xs text-gray-400">(comma separated)</span></label>
-                    <textarea name="interests" class="input" rows="2" placeholder="e.g. Programming, Sports, Music"><?= e(post('interests')) ?></textarea>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="label">Password <span class="text-red-500">*</span></label>
-                        <input type="password" name="password" class="input" placeholder="At least 6 characters" required>
-                    </div>
-                    <div>
-                        <label class="label">Confirm Password <span class="text-red-500">*</span></label>
-                        <input type="password" name="confirm_password" class="input" placeholder="Re-enter password" required>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-primary w-full">Register</button>
-            </form>
-
-            <p class="text-center text-sm text-gray-500 mt-6">
-                Already have an account?
-                <a href="<?= url('/login?tab=student') ?>" class="font-medium text-primary-600 hover:text-primary-500">Log in</a>
-            </p>
         </div>
     </div>
+
+    <p class="mt-6 text-sm text-gray-500">&copy; <?= date('Y') ?> Eventrify &middot; University Club Events</p>
     <script src="<?= url('/assets/js/app.js') ?>"></script>
 </body>
 </html>

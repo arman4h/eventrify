@@ -1,5 +1,4 @@
 <?php
-
 require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
@@ -7,13 +6,12 @@ require_once BASE_PATH . '/app/config/database.php';
 $eventId = (int) get('event_id');
 
 $stmt = $db->prepare("
-    SELECT e.*, c.club_name
+    SELECT e.*, c.club_name, c.description AS club_description
     FROM events e
-    LEFT JOIN clubs c ON c.club_id = e.club_id
+    JOIN clubs c ON c.club_id = e.club_id
     WHERE e.event_id = ? AND e.status = 'published'
     LIMIT 1
 ");
-
 $stmt->bind_param('i', $eventId);
 $stmt->execute();
 $event = $stmt->get_result()->fetch_assoc();
@@ -26,112 +24,155 @@ $pageTitle = $event['title'];
 
 $errors = [];
 
+$fStmt = $db->prepare("SELECT * FROM event_registration_fields WHERE event_id = ? ORDER BY display_order");
+$fStmt->bind_param('i', $eventId);
+$fStmt->execute();
+$regFields = $fStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$hasCustomFields = false;
+foreach ($regFields as $f) {
+    if (!in_array($f['field_label'], ['Full Name', 'Email', 'Student ID', 'Department'], true)) {
+        $hasCustomFields = true;
+        break;
+    }
+}
+
+$deptMap = [
+    'Computer Science & Engineering' => 'CSE',
+    'Electrical & Electronic Engineering' => 'EEE',
+    'Data Science' => 'DS',
+    'English' => 'English',
+    'Business Administration' => 'BBA',
+    'Economics' => 'Economics',
+    'EDS' => 'EDS',
+];
+
+$studentSession = isStudent() ? currentUser() : null;
+$responsesOld = $_POST['responses'] ?? [];
+$fieldDefaults = [];
+foreach ($regFields as $f) {
+    $value = '';
+    if (isset($responsesOld[$f['field_id']])) {
+        $value = $responsesOld[$f['field_id']];
+    } elseif ($studentSession) {
+        $value = match ($f['field_label']) {
+            'Full Name' => $studentSession['name'] ?? '',
+            'Email' => $studentSession['email'] ?? '',
+            'Student ID' => $studentSession['university_id'] ?? '',
+            'Department' => $deptMap[$studentSession['department'] ?? ''] ?? '',
+            default => '',
+        };
+    }
+    $fieldDefaults[$f['field_id']] = $value;
+}
+
+$fieldInput = function (array $f) use ($fieldDefaults): string {
+    $id = (int) $f['field_id'];
+    $val = $fieldDefaults[$id] ?? '';
+    $required = $f['is_required'] ? ' required' : '';
+
+    switch ($f['field_type']) {
+        case 'dropdown':
+            $options = $f['field_options'] ? explode(',', $f['field_options']) : [];
+            $html = "<select name=\"responses[$id]\" class=\"select\"$required>";
+            $html .= '<option value="">Select...</option>';
+            foreach ($options as $opt) {
+                $opt = trim($opt);
+                if ($opt === '') continue;
+                $html .= '<option value="' . e($opt) . '"' . ((string) $val === $opt ? ' selected' : '') . '>' . e($opt) . '</option>';
+            }
+            return $html . '</select>';
+        case 'checkbox':
+            return '<input type="checkbox" name="responses[' . $id . ']" value="1" class="rounded border-gray-300"' . (!empty($val) ? ' checked' : '') . '>';
+        case 'date':
+            return '<input type="date" name="responses[' . $id . ']" class="input" value="' . e($val) . '"' . $required . '>';
+        case 'number':
+            return '<input type="number" name="responses[' . $id . ']" class="input" value="' . e($val) . '"' . $required . '>';
+        case 'email':
+            return '<input type="email" name="responses[' . $id . ']" class="input" value="' . e($val) . '"' . $required . '>';
+        default:
+            return '<input type="text" name="responses[' . $id . ']" class="input" value="' . e($val) . '"' . $required . '>';
+    }
+};
+
 if (isPost() && post('action') === 'register_event') {
-    $errors = [];
+    $responses = $_POST['responses'] ?? [];
 
-    $guestName      = post('guest_name');
-    $guestStudentId = post('guest_student_id');
+    $guestName = '';
+    $guestEmail = '';
+    $guestStudentId = '';
+    $guestDepartment = '';
 
-    if ($guestName === '') {
-        $errors[] = 'Please enter your full name.';
+    foreach ($regFields as $f) {
+        $val = isset($responses[$f['field_id']]) ? trim((string) $responses[$f['field_id']]) : '';
+        if ($f['is_required'] && $val === '') {
+            $errors[] = $f['field_label'] . ' is required.';
+        }
+        if ($f['field_label'] === 'Full Name') $guestName = $val;
+        if ($f['field_label'] === 'Email') $guestEmail = $val;
+        if ($f['field_label'] === 'Student ID') $guestStudentId = $val;
+        if ($f['field_label'] === 'Department') $guestDepartment = $val;
     }
 
-    if (
-        $event['registration_deadline'] &&
-        strtotime($event['registration_deadline']) < time()
-    ) {
+    if ($guestEmail !== '' && !filter_var($guestEmail, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid email address.';
+    }
+
+    if ($event['registration_deadline'] && strtotime($event['registration_deadline']) < time()) {
         $errors[] = 'Registration for this event has closed.';
     }
 
-    if ($event['capacity'] > 0) {
-        $stmt = $db->prepare("
-            SELECT COUNT(*) AS registered_count
-            FROM event_registrations
-            WHERE event_id = ?
-              AND status NOT IN ('cancelled', 'no_show')
-        ");
+    $countStmt = $db->prepare("
+        SELECT COUNT(*) AS registered_count
+        FROM event_registrations
+        WHERE event_id = ?
+          AND status IN ('registered', 'attended')
+    ");
+    $countStmt->bind_param('i', $eventId);
+    $countStmt->execute();
+    $registeredCount = (int) $countStmt->get_result()->fetch_assoc()['registered_count'];
 
-        $stmt->bind_param('i', $eventId);
-        $stmt->execute();
-
-        $registeredCount = (int) $stmt
-            ->get_result()
-            ->fetch_assoc()['registered_count'];
-    } else {
-        $registeredCount = 0;
-    }
-
-    $associateStudentId = (
-        isLoggedIn() && isStudent()
-    ) ? currentUserId() : null;
+    $associateStudentId = (isLoggedIn() && isStudent()) ? currentUserId() : null;
 
     if (empty($errors)) {
-
-        /*
-         * Check whether the logged-in student is already registered.
-         */
         if ($associateStudentId) {
             $stmt = $db->prepare("
                 SELECT 1
                 FROM event_registrations
-                WHERE event_id = ?
-                  AND student_id = ?
+                WHERE event_id = ? AND student_id = ?
                   AND status NOT IN ('cancelled')
                 LIMIT 1
             ");
-
-            $stmt->bind_param(
-                'ii',
-                $eventId,
-                $associateStudentId
-            );
-
+            $stmt->bind_param('ii', $eventId, $associateStudentId);
             $stmt->execute();
-
             if ($stmt->get_result()->fetch_assoc()) {
                 $errors[] = 'You are already registered for this event.';
             }
         }
 
-        /*
-         * Check whether the provided student ID is already registered.
-         */
         if ($guestStudentId !== '') {
             $stmt = $db->prepare("
                 SELECT 1
                 FROM event_registrations
-                WHERE event_id = ?
-                  AND guest_student_id = ?
+                WHERE event_id = ? AND guest_student_id = ?
                   AND status NOT IN ('cancelled')
                 LIMIT 1
             ");
-
-            $stmt->bind_param(
-                'is',
-                $eventId,
-                $guestStudentId
-            );
-
+            $stmt->bind_param('is', $eventId, $guestStudentId);
             $stmt->execute();
-
             if ($stmt->get_result()->fetch_assoc()) {
-                $errors[] = 'This student ID is already registered for this event.';
+                $errors[] = 'This Student ID is already registered for this event.';
             }
         }
     }
 
-    /*
-     * Create registration.
-     */
     if (empty($errors)) {
+        $capacity = (int) $event['capacity'];
+        $isFull = $capacity > 0 && $registeredCount >= $capacity;
 
-        if (
-            $event['capacity'] > 0 &&
-            $registeredCount >= $event['capacity']
-        ) {
+        if ($isFull) {
             $status = 'waitlisted';
-            $waitlistPosition =
-                $registeredCount - $event['capacity'] + 1;
+            $waitlistPosition = $registeredCount - $capacity + 1;
         } else {
             $status = 'registered';
             $waitlistPosition = null;
@@ -139,500 +180,292 @@ if (isPost() && post('action') === 'register_event') {
 
         $stmt = $db->prepare("
             INSERT INTO event_registrations
-                (
-                    event_id,
-                    student_id,
-                    guest_name,
-                    guest_student_id,
-                    is_walkin,
-                    status,
-                    waitlist_position
-                )
+                (event_id, student_id, guest_name, guest_student_id, is_walkin, status, waitlist_position)
             VALUES
-                (
-                    ?,
-                    NULLIF(?, 0),
-                    ?,
-                    NULLIF(?, ''),
-                    0,
-                    ?,
-                    NULLIF(?, 0)
-                )
+                (?, ?, ?, ?, 0, ?, ?)
         ");
 
         $bindEventId = $eventId;
-
-        $bindStudentId = (int) $associateStudentId;
-        $bindStudentId = $bindStudentId === 0
-            ? null
-            : $bindStudentId;
-
+        $bindStudentId = $associateStudentId ?? null;
         $bindGuestName = $guestName;
-        $bindGuestStud = $guestStudentId;
+        $bindGuestStud = $guestStudentId !== '' ? $guestStudentId : null;
         $bindStatus = $status;
+        $bindWaitlistPos = $waitlistPosition === null ? null : (int) $waitlistPosition;
 
-        $bindWaitlistPos = $waitlistPosition === null
-            ? null
-            : (int) $waitlistPosition;
-
-        $stmt->bind_param(
-            'iisssi',
-            $bindEventId,
-            $bindStudentId,
-            $bindGuestName,
-            $bindGuestStud,
-            $bindStatus,
-            $bindWaitlistPos
-        );
+        $stmt->bind_param('iisssi', $bindEventId, $bindStudentId, $bindGuestName, $bindGuestStud, $bindStatus, $bindWaitlistPos);
 
         if ($stmt->execute()) {
+            $registrationId = (int) $db->insert_id;
 
-            setOld([]);
-
-            if ($status === 'waitlisted') {
-                $_SESSION['flash']['success'] =
-                    'The event is full, so you have been placed on the waitlist at position #'
-                    . $waitlistPosition
-                    . '.';
-            } else {
-                $_SESSION['flash']['success'] =
-                    'You have successfully registered for this event!';
+            $respStmt = $db->prepare("INSERT INTO registration_field_responses (registration_id, field_id, response_value) VALUES (?, ?, ?)");
+            foreach ($regFields as $f) {
+                $val = $responses[$f['field_id']] ?? '';
+                if ($val === '') continue;
+                $respStmt->bind_param('iis', $registrationId, $f['field_id'], $val);
+                $respStmt->execute();
             }
 
-            redirect('/event?event_id=' . $eventId);
+            setOld([]);
+            if ($guestEmail !== '') {
+                $_SESSION['flash']['success'] = 'You have successfully registered for this event! A confirmation has been sent to ' . $guestEmail . '.';
+            } elseif ($status === 'waitlisted') {
+                $_SESSION['flash']['success'] = 'The event is full, so you have been placed on the waitlist at position #' . $waitlistPosition . '.';
+            } else {
+                $_SESSION['flash']['success'] = 'You have successfully registered for this event!';
+            }
 
+            redirect('/event?event_id=' . $eventId . '&reg=' . $registrationId);
         } else {
-            $errors[] =
-                'Registration failed. Please try again.';
+            $errors[] = 'Registration failed. Please try again.';
         }
     }
 }
-
-
-/*
- * Get current registration count.
- */
-$registeredCount = 0;
 
 $countStmt = $db->prepare("
     SELECT COUNT(*) AS total
     FROM event_registrations
-    WHERE event_id = ?
-      AND status = 'registered'
+    WHERE event_id = ? AND status IN ('registered', 'attended')
 ");
+$countStmt->bind_param('i', $eventId);
+$countStmt->execute();
+$registeredCount = (int) $countStmt->get_result()->fetch_assoc()['total'];
 
-if ($countStmt) {
-    $countStmt->bind_param('i', $eventId);
-    $countStmt->execute();
+$capacity = (int) $event['capacity'];
+$isFull = $capacity > 0 && $registeredCount >= $capacity;
+$availableSeats = $capacity > 0 ? max(0, $capacity - $registeredCount) : 0;
+$capacityPercent = $capacity > 0 ? (int) round($registeredCount / $capacity * 100) : 0;
 
-    $countResult = $countStmt
-        ->get_result()
-        ->fetch_assoc();
+$deadlinePassed = $event['registration_deadline'] && strtotime($event['registration_deadline']) < time();
+$regOpen = $event['status'] !== 'cancelled' && !$deadlinePassed;
 
-    $registeredCount = (int) $countResult['total'];
-}
-
-
-/*
- * Calculate available seats.
- */
-$totalCapacity = (int) $event['capacity'];
-
-if ($totalCapacity > 0) {
-    $availableSeats = $totalCapacity - $registeredCount;
-
-    if ($availableSeats < 0) {
-        $availableSeats = 0;
-    }
+if ($event['status'] === 'cancelled' || $deadlinePassed) {
+    $eventStatusLabel = 'Closed';
+    $eventStatusBadge = 'badge-neutral';
+} elseif ($isFull) {
+    $eventStatusLabel = 'Full';
+    $eventStatusBadge = 'badge-danger';
 } else {
-    $availableSeats = 0;
+    $eventStatusLabel = 'Open';
+    $eventStatusBadge = 'badge-success';
 }
 
-
-/*
- * Check current student's registration status.
- */
-$isAlreadyRegistered = false;
-$isAlreadyWaitlisted = false;
-
-if (
-    isLoggedIn() &&
-    currentUserRole() === 'student'
-) {
-    $studentId = $_SESSION['user_id'] ?? 0;
-
+$alreadyRegistered = false;
+$alreadyWaitlisted = false;
+if (isStudent()) {
     $checkReg = $db->prepare("
         SELECT status
         FROM event_registrations
-        WHERE event_id = ?
-          AND student_id = ?
+        WHERE event_id = ? AND student_id = ?
           AND status NOT IN ('cancelled')
         LIMIT 1
     ");
-
-    $checkReg->bind_param(
-        'ii',
-        $eventId,
-        $studentId
-    );
-
+    $checkReg->bind_param('ii', $eventId, currentUserId());
     $checkReg->execute();
-
-    $regResult = $checkReg
-        ->get_result()
-        ->fetch_assoc();
-
+    $regResult = $checkReg->get_result()->fetch_assoc();
     if ($regResult) {
-
-        if ($regResult['status'] === 'registered') {
-            $isAlreadyRegistered = true;
-
+        if ($regResult['status'] === 'registered' || $regResult['status'] === 'attended') {
+            $alreadyRegistered = true;
         } elseif ($regResult['status'] === 'waitlisted') {
-            $isAlreadyWaitlisted = true;
+            $alreadyWaitlisted = true;
         }
     }
 }
 
-require BASE_PATH . '/app/layouts/landing/header.php';
+$startTs = strtotime($event['start_time']);
+$endTs = $event['end_time'] ? strtotime($event['end_time']) : $startTs + 3 * 3600;
+$deadlineTs = $event['registration_deadline'] ? strtotime($event['registration_deadline']) : $startTs - 3600;
 
+require BASE_PATH . '/app/layouts/landing/header.php';
 ?>
 
-<article class="card p-8 max-w-3xl mx-auto mb-8">
+<div class="mx-auto max-w-7xl px-4 sm:px-6 py-10">
+    <nav class="breadcrumb">
+        <a href="<?= url('/events') ?>" class="breadcrumb-link">Explore Events</a>
+        <span>/</span>
+        <span class="breadcrumb-current"><?= e($event['title']) ?></span>
+    </nav>
 
-    <div class="flex items-center justify-between mb-4">
+    <?php
+    $alertType = 'success';
+    $alertMessage = flash('success');
+    require BASE_PATH . '/app/components/alert.php';
 
-        <?php if ($event['category']): ?>
+    $alertType = 'error';
+    $alertMessage = flash('error');
+    require BASE_PATH . '/app/components/alert.php';
 
-            <span
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700"
-            >
-                <?= e($event['category']) ?>
-            </span>
+    foreach ($errors as $error) {
+        $alertType = 'error';
+        $alertMessage = $error;
+        require BASE_PATH . '/app/components/alert.php';
+    }
+    ?>
 
+    <div class="rounded-xl border border-gray-200 bg-gray-100 h-48 sm:h-64 flex items-center justify-center text-gray-400 relative mb-8 overflow-hidden">
+        <?php if (!empty($event['poster'])): ?>
+            <img src="<?= e($event['poster']) ?>" alt="<?= e($event['title']) ?> poster" class="w-full h-full object-cover">
         <?php else: ?>
-
-            <span
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
-            >
-                Event
-            </span>
-
+            <?= icon('calendar', 'w-16 h-16') ?>
         <?php endif; ?>
-
-        <a
-            href="<?= url('/events') ?>"
-            class="text-sm text-gray-500 hover:text-gray-700"
-        >
-            &larr; Back to all events
-        </a>
-
+        <span class="badge-primary absolute left-4 top-4"><?= e($event['category'] ?? 'Event') ?></span>
     </div>
 
-
-    <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
-        <?= e($event['title']) ?>
-    </h1>
-
-
-    <?php if ($event['club_name']): ?>
-
-        <p class="text-sm font-semibold text-primary-600 mb-4">
-            Hosted by <?= e($event['club_name']) ?>
-        </p>
-
-    <?php endif; ?>
-
-
-    <dl class="grid sm:grid-cols-2 gap-4 mb-6 text-sm">
-
-        <div class="p-4 bg-gray-50 rounded-lg">
-
-            <dt class="text-gray-500">
-                Start Time
-            </dt>
-
-            <dd class="font-semibold text-gray-900 mt-1">
-                <?= formatDate(
-                    $event['start_time'],
-                    'M d, Y h:i A'
-                ) ?>
-            </dd>
-
+    <div class="page-header">
+        <div>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900"><?= e($event['title']) ?></h1>
+            <p class="text-sm text-gray-500 mt-2">
+                Hosted by <span class="font-medium text-gray-900"><?= e($event['club_name']) ?></span>
+                <span class="badge-primary ml-2"><?= e($event['category'] ?? 'Event') ?></span>
+            </p>
         </div>
-
-
-        <div class="p-4 bg-gray-50 rounded-lg">
-
-            <dt class="text-gray-500">
-                End Time
-            </dt>
-
-            <dd class="font-semibold text-gray-900 mt-1">
-                <?= $event['end_time']
-                    ? formatDate(
-                        $event['end_time'],
-                        'M d, Y h:i A'
-                    )
-                    : '—'
-                ?>
-            </dd>
-
+        <div>
+            <?php if (!$regOpen): ?>
+                <a class="btn-secondary opacity-50 pointer-events-none cursor-not-allowed">Registration Closed</a>
+            <?php elseif ($alreadyRegistered): ?>
+                <span class="badge-success"><?= icon('check', 'w-3.5 h-3.5') ?> You're registered</span>
+            <?php elseif ($alreadyWaitlisted): ?>
+                <span class="badge-warning">You're on the waitlist</span>
+            <?php elseif ($isFull): ?>
+                <a href="<?= url('/event?event_id=' . $eventId) . '#register' ?>" class="btn-secondary">Join Waitlist</a>
+            <?php else: ?>
+                <a href="<?= url('/event?event_id=' . $eventId) . '#register' ?>" class="btn-primary">Register Now</a>
+            <?php endif; ?>
         </div>
+    </div>
 
-
-        <div class="p-4 bg-gray-50 rounded-lg">
-
-            <dt class="text-gray-500 font-medium">
-                📍 Venue
-            </dt>
-
-            <dd class="font-bold text-gray-900 mt-1">
-                <?= e($event['venue']) ?>
-            </dd>
-
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden mb-10">
+        <div class="bg-white p-3 sm:p-4">
+            <p class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <?= icon('calendar', 'w-4 h-4') ?>
+                Date
+            </p>
+            <p class="mt-1.5 text-sm font-semibold text-gray-900"><?= formatDate($event['start_time']) ?></p>
         </div>
+        <div class="bg-white p-3 sm:p-4">
+            <p class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <?= icon('clock', 'w-4 h-4') ?>
+                Time
+            </p>
+            <p class="mt-1.5 text-sm font-semibold text-gray-900"><?= date('g:i A', $startTs) ?> - <?= date('g:i A', $endTs) ?></p>
+        </div>
+        <div class="bg-white p-3 sm:p-4">
+            <p class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <?= icon('map-pin', 'w-4 h-4') ?>
+                Location
+            </p>
+            <p class="mt-1.5 text-sm font-semibold text-gray-900"><?= e($event['venue']) ?></p>
+        </div>
+        <div class="bg-white p-3 sm:p-4">
+            <p class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                <?= icon('ticket', 'w-4 h-4') ?>
+                Status
+            </p>
+            <p class="mt-1.5 text-sm font-semibold text-gray-900"><span class="<?= $eventStatusBadge ?>"><?= e($eventStatusLabel) ?></span></p>
+        </div>
+    </div>
 
+    <div class="space-y-10">
+        <section>
+            <h2 class="text-xl font-bold text-gray-900 mb-3">About the Event</h2>
+            <p class="text-gray-600 leading-relaxed whitespace-pre-line"><?= e($event['description']) ?></p>
+        </section>
 
-        <div class="p-4 bg-gray-50 rounded-lg sm:col-span-2">
+        <section id="register" class="card p-6 space-y-5">
+            <h2 class="text-lg font-bold text-gray-900">Registration</h2>
 
-            <dt class="text-gray-500 font-medium">
-                👥 Registration Status
-            </dt>
-
-            <dd class="font-bold text-gray-900 mt-1 flex items-center gap-2">
-
-                <?php if ($totalCapacity > 0): ?>
-
-                    <span>
-                        <?= $availableSeats ?>
-                        /
-                        <?= $totalCapacity ?>
-                        Seats Available
-                    </span>
-
-                    <?php if ($availableSeats === 0): ?>
-
-                        <span
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
-                        >
-                            Waitlist Active
-                        </span>
-
-                    <?php endif; ?>
-
+            <div>
+                <?php if ($capacity > 0): ?>
+                    <p class="mt-1 text-sm text-gray-600">
+                        <span class="font-semibold text-gray-900"><?= $isFull ? 0 : $availableSeats ?></span>
+                        / <?= $capacity ?> seats available
+                    </p>
+                    <div class="progress-bar mt-3">
+                        <div class="progress-fill <?= $isFull ? 'bg-red-600' : '' ?>" style="width: <?= min(100, $capacityPercent) ?>%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">
+                        <?= $isFull ? 'Waitlist active — free spots appear as registrations are cancelled.' : $registeredCount . ' of ' . $capacity . ' seats filled.' ?>
+                    </p>
                 <?php else: ?>
-
-                    <span>
-                        Unlimited Seats
-                    </span>
-
+                    <p class="mt-1 text-sm text-gray-600">No seat limit — open registration.</p>
                 <?php endif; ?>
 
-            </dd>
-
-        </div>
-
-
-        <?php if ($event['registration_deadline']): ?>
-
-            <div class="p-4 bg-gray-50 rounded-lg sm:col-span-2">
-
-                <dt class="text-gray-500">
-                    Registration Deadline
-                </dt>
-
-                <dd class="font-semibold text-gray-900 mt-1">
-                    <?= formatDate(
-                        $event['registration_deadline'],
-                        'M d, Y h:i A'
-                    ) ?>
-                </dd>
-
+                <?php if ($event['registration_deadline']): ?>
+                    <p class="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-500 flex items-center gap-2">
+                        <?= icon('clock', 'w-4 h-4 text-gray-400') ?>
+                        Registration closes <?= formatDate($event['registration_deadline']) ?>
+                    </p>
+                <?php endif; ?>
             </div>
 
-        <?php endif; ?>
+            <div class="pt-4 border-t border-gray-100">
+                <?php if ($alreadyRegistered): ?>
+                    <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
+                        <p class="font-semibold">You're registered for this event.</p>
+                        <p class="mt-1">Show your registration confirmation at check-in.</p>
+                    </div>
+                <?php elseif ($alreadyWaitlisted): ?>
+                    <div class="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                        <p class="font-semibold">You're on the waitlist.</p>
+                        <p class="mt-1">You'll be upgraded automatically if a spot opens up.</p>
+                    </div>
+                <?php elseif (!$regOpen): ?>
+                    <a class="btn-secondary btn-lg w-full opacity-50 pointer-events-none cursor-not-allowed">Registration Closed</a>
+                    <p class="text-xs text-gray-500 mt-3 text-center">Registration for this event has closed.</p>
+                <?php else: ?>
+                    <form method="POST" action="<?= url('/event?event_id=' . $eventId) ?>" class="space-y-4">
+                        <input type="hidden" name="action" value="register_event">
+                        <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Required Information</p>
+                            <?php foreach ($regFields as $f): ?>
+                                <div>
+                                    <label class="label <?= $f['is_required'] ? 'label-required' : '' ?>">
+                                        <?= e($f['field_label']) ?>
+                                        <?php if ($f['field_type'] === 'checkbox'): ?>
+                                            <span class="ml-2"><?= $fieldInput($f) ?></span>
+                                        <?php else: ?>
+                                            <?= $fieldInput($f) ?>
+                                        <?php endif; ?>
+                                    </label>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if (!$hasCustomFields): ?>
+                                <p class="text-xs text-gray-400"><?= icon('info', 'w-3.5 h-3.5 inline -mt-0.5') ?> This form is provided by the organizing club.</p>
+                            <?php endif; ?>
+                        </div>
+                        <button type="submit" class="btn-primary btn-lg w-full">
+                            <?= $isFull ? 'Join Waitlist' : 'Register Now' ?>
+                            <?= icon('arrow-right', 'w-5 h-5') ?>
+                        </button>
+                        <p class="text-xs text-gray-500 text-center">
+                            No account needed. <a href="<?= url('/login') ?>" class="text-blue-600 hover:underline">Log in</a> to pre-fill and track your registrations.
+                        </p>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </section>
 
-    </dl>
+        <div class="card p-5">
+            <div class="flex items-start gap-4">
+                <span class="inline-flex w-12 h-12 rounded-lg bg-blue-50 text-blue-600 items-center justify-center shrink-0"><?= icon('grad', 'w-6 h-6') ?></span>
+                <div class="min-w-0">
+                    <h3 class="font-semibold text-gray-900"><?= e($event['club_name']) ?></h3>
+                    <p class="text-sm text-gray-600 mt-1 leading-relaxed line-clamp-2">
+                        <?= e($event['club_description'] ?? 'A university club organizing events for the campus community.') ?>
+                    </p>
+                    <a href="<?= url('/') ?>#clubs" class="btn-secondary btn-sm mt-3">View Club</a>
+                </div>
+            </div>
+        </div>
 
-
-    <h2 class="text-lg font-semibold text-gray-900 mb-2">
-        About this event
-    </h2>
-
-    <p class="text-gray-700 leading-relaxed mb-4">
-        <?= e($event['description']) ?>
-    </p>
-
-
-    <div class="border-t border-gray-200 pt-6">
-
-        <a
-            href="<?= url('/events') ?>"
-            class="text-sm text-gray-500 hover:text-gray-700"
-        >
-            &larr; Back to all events
-        </a>
-
+        <div class="card p-6">
+            <h3 class="font-semibold text-gray-900 mb-3">Location</h3>
+            <p class="text-sm text-gray-600"><?= e($event['venue']) ?></p>
+            <div class="mt-4 h-40 rounded-lg bg-gray-100 border border-gray-200 flex flex-col items-center justify-center text-gray-400">
+                <?= icon('map-pin', 'w-8 h-8') ?>
+                <p class="text-xs mt-2">Map preview unavailable</p>
+            </div>
+        </div>
     </div>
-
-</article>
-
-
-<section class="card p-8 max-w-3xl mx-auto">
-
-    <div class="mb-6">
-
-        <h2 class="text-xl font-bold text-gray-900">
-            Register for this event
-        </h2>
-
-        <p class="text-sm text-gray-500 mt-1">
-
-            <?php if ($event['capacity'] > 0): ?>
-
-                <?= (int) $event['capacity'] ?>
-                seats available. Fill in your details below to confirm your spot.
-
-            <?php else: ?>
-
-                Fill in your details below to confirm your spot.
-
-            <?php endif; ?>
-
-        </p>
-
-    </div>
-
-
-    <?php if (flash('success')): ?>
-
-        <div class="mb-4">
-
-            <?php
-
-            $alertType = 'success';
-            $alertMessage = flash('success');
-
-            require_once BASE_PATH . '/app/components/alert.php';
-
-            ?>
-
-        </div>
-
-    <?php endif; ?>
-
-
-    <?php foreach ($errors as $error): ?>
-
-        <div class="mb-2">
-
-            <?php
-
-            $alertType = 'error';
-            $alertMessage = $error;
-
-            require BASE_PATH . '/app/components/alert.php';
-
-            ?>
-
-        </div>
-
-    <?php endforeach; ?>
-
-
-    <?php if (
-        $event['registration_deadline'] &&
-        strtotime($event['registration_deadline']) < time()
-    ): ?>
-
-        <div class="mb-2">
-
-            <h2 class="text-xl font-bold text-gray-900">
-            Registration has been closed ..
-             </h2>
-
-        </div>
-
-    <?php else: ?>
-
-        <form
-            method="POST"
-            action="<?= url('/event?event_id=' . $eventId) ?>"
-            class="space-y-4"
-        >
-
-            <input
-                type="hidden"
-                name="action"
-                value="register_event"
-            >
-
-
-            <div>
-
-                <label class="label">
-                    Full Name
-                    <span class="text-red-500">*</span>
-                </label>
-
-                <input
-                    type="text"
-                    name="guest_name"
-                    class="input"
-                    placeholder="John Doe"
-                    value="<?= e(
-                        post('guest_name')
-                            ? post('guest_name')
-                            : (
-                                isStudent()
-                                    ? currentUser()['name']
-                                    : ''
-                            )
-                    ) ?>"
-                    required
-                >
-
-            </div>
-
-
-            <div>
-
-                <label class="label">
-                    Student ID
-                </label>
-
-                <input
-                    type="text"
-                    name="guest_student_id"
-                    class="input"
-                    placeholder="e.g. 011 231 456"
-                    value="<?= e(post('guest_student_id')) ?>"
-                >
-
-                <p class="text-xs text-gray-500 mt-1">
-                    Optional — provide it if you'd like us to link this
-                    registration to your university ID.
-                </p>
-
-            </div>
-
-
-            <div>
-
-                <button
-                    type="submit"
-                    class="btn-primary w-full"
-                >
-                    Register Now
-                </button>
-
-            </div>
-
-        </form>
-
-    <?php endif; ?>
-
-</section>
-
+</div>
 
 <?php require BASE_PATH . '/app/layouts/landing/footer.php'; ?>

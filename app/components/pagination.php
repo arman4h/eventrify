@@ -5,39 +5,35 @@ $baseUrl = $baseUrl ?? '/';
 ?>
 
 <?php if ($totalPages > 1): ?>
-<div class="flex items-center justify-between px-4 py-3 sm:px-6">
-    <div class="flex-1 flex justify-between sm:hidden">
-        <a href="<?= e($baseUrl) ?>?page=<?= max(1, $currentPage - 1) ?>"
-           class="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 <?= $currentPage <= 1 ? 'pointer-events-none opacity-50' : '' ?>">
+<div class="flex items-center justify-between gap-4 px-1 py-4">
+    <p class="hidden sm:block text-sm text-gray-500">
+        Page <span class="font-medium text-gray-900"><?= $currentPage ?></span> of <span class="font-medium text-gray-900"><?= $totalPages ?></span>
+    </p>
+
+    <div class="flex items-center gap-2">
+        <?php $sep = str_contains($baseUrl, '?') ? '&' : '?'; ?>
+        <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= max(1, $currentPage - 1) ?>"
+           class="btn-secondary btn-sm <?= $currentPage <= 1 ? 'pointer-events-none opacity-40' : '' ?>">
+            <?= icon('chevron-left', 'w-4 h-4') ?>
             Previous
         </a>
-        <a href="<?= e($baseUrl) ?>?page=<?= min($totalPages, $currentPage + 1) ?>"
-           class="ml-3 relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 <?= $currentPage >= $totalPages ? 'pointer-events-none opacity-50' : '' ?>">
+
+        <div class="hidden sm:flex items-center gap-1">
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <?php if ($i === $currentPage): ?>
+                    <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-sm font-semibold text-white"><?= $i ?></span>
+                <?php else: ?>
+                    <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= $i ?>"
+                       class="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"><?= $i ?></a>
+                <?php endif; ?>
+            <?php endfor; ?>
+        </div>
+
+        <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= min($totalPages, $currentPage + 1) ?>"
+           class="btn-secondary btn-sm <?= $currentPage >= $totalPages ? 'pointer-events-none opacity-40' : '' ?>">
             Next
+            <?= icon('chevron-right', 'w-4 h-4') ?>
         </a>
-    </div>
-    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-        <div>
-            <p class="text-sm text-gray-700">
-                Page <span class="font-medium"><?= $currentPage ?></span> of <span class="font-medium"><?= $totalPages ?></span>
-            </p>
-        </div>
-        <div>
-            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                    <?php if ($i === $currentPage): ?>
-                        <span class="relative inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-primary-600 z-10">
-                            <?= $i ?>
-                        </span>
-                    <?php else: ?>
-                        <a href="<?= e($baseUrl) ?>?page=<?= $i ?>"
-                           class="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50">
-                            <?= $i ?>
-                        </a>
-                    <?php endif; ?>
-                <?php endfor; ?>
-            </nav>
-        </div>
     </div>
 </div>
 <?php endif; ?>

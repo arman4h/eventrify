@@ -7,6 +7,10 @@ module.exports = {
     "./src/**/*.{html,js}",
   ],
   safelist: [
+    // Custom component classes (always emitted so dynamic pages never miss them)
+    {
+      pattern: /^(btn|btn-primary|btn-secondary|btn-danger|btn-success|btn-ghost|btn-sm|btn-lg|btn-icon|card|card-hover|input|input-error|input-success|select|textarea|label|label-required|form-group|form-hint|form-error|table-wrapper|table|badge|badge-primary|badge-success|badge-danger|badge-warning|badge-info|badge-neutral|sidebar|sidebar-link|sidebar-link-active|sidebar-section-title|stat-card|stat-label|stat-value|page-header|page-title|page-subtitle|tabs|tab|tab-active|empty-state|empty-state-icon|empty-state-title|empty-state-text|alert|alert-success|alert-error|alert-warning|alert-info|modal-overlay|modal-content|modal-header|modal-title|modal-body|modal-footer|dropdown|dropdown-menu|dropdown-item|dropdown-divider|progress-bar|progress-fill|breadcrumb|breadcrumb-link|breadcrumb-current|search-input|search-wrapper|search-icon|avatar|avatar-sm|avatar-md|avatar-lg|skeleton|separator|bottom-nav|bottom-nav-item|bottom-nav-item-active)$/,
+    },
     // Color utilities (all palettes x all shades)
     {
       pattern: /^(bg|text|border|ring|from|via|to|divide|fill|stroke|accent|decoration|shadow)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black|transparent|primary|sidebar)-(50|100|200|300|400|500|600|700|800|900|950)$/,

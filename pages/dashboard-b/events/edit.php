@@ -13,8 +13,7 @@ $clubId = (int) currentUser()['club_id'];
 $stmt = $db->prepare("SELECT * FROM events WHERE event_id = ? AND club_id = ?");
 $stmt->bind_param('ii', $eventId, $clubId);
 $stmt->execute();
-$result = $stmt->get_result();
-$event = $result->fetch_assoc();
+$event = $stmt->get_result()->fetch_assoc();
 
 if (!$event) {
     abort(404, 'Event not found');
@@ -23,57 +22,86 @@ if (!$event) {
 $errors = [];
 
 if (isPost()) {
-    $title                = post('title');
-    $description          = post('description');
-    $category             = post('category');
-    $venue                = post('venue');
-    $startTime            = post('start_time');
-    $endTime              = post('end_time');
+    $title = post('title');
+    $description = post('description');
+    $category = post('category');
+    $date = post('date');
+    $startTime = post('start_time');
+    $endTime = post('end_time');
+    $venue = post('venue');
+    $capacity = (int) post('capacity');
     $registrationDeadline = post('registration_deadline');
-    $capacity             = (int) post('capacity');
-    $status               = post('status');
+    $status = post('status');
 
     $allowed = ['draft', 'published', 'cancelled', 'completed'];
     if (!in_array($status, $allowed, true)) {
         $status = 'draft';
     }
 
-    if ($title === '' || $venue === '' || $startTime === '') {
+    $startDateTime = ($date !== '' && $startTime !== '') ? "$date $startTime:00" : '';
+    $endDateTime = ($date !== '' && $endTime !== '') ? "$date $endTime:00" : '';
+
+    if ($title === '' || $venue === '' || $startDateTime === '') {
         $errors[] = 'Title, venue, and start time are required.';
     }
 
-    if ($endTime !== '' && $endTime < $startTime) {
+    if ($endTime !== '' && $startTime !== '' && $endTime < $startTime) {
         $errors[] = 'End time cannot be before the start time.';
     }
 
-    if (empty($errors)) {
-        $stmt = $db->prepare("
-            UPDATE events
-            SET title = ?, description = ?, category = ?, venue = ?,
-                start_time = ?, end_time = ?, registration_deadline = ?,
-                capacity = ?, status = ?
-            WHERE event_id = ? AND club_id = ?
-        ");
+    $poster = null;
+    if (isset($_FILES['poster']) && $_FILES['poster']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath = $_FILES['poster']['tmp_name'];
+        $mime = mime_content_type($tmpPath);
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $size = (int) $_FILES['poster']['size'];
 
-        $end = $endTime !== '' ? $endTime : null;
+        if (!in_array($mime, $allowedMimes, true)) {
+            $errors[] = 'Poster must be a JPG, PNG, WebP, or GIF image.';
+        } elseif ($size > 5 * 1024 * 1024) {
+            $errors[] = 'Poster image must be 5MB or smaller.';
+        } else {
+            $poster = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($tmpPath));
+        }
+    }
+
+    if (empty($errors)) {
+        if ($poster !== null) {
+            $stmt = $db->prepare("
+                UPDATE events
+                SET title = ?, description = ?, category = ?, poster = ?, venue = ?,
+                    start_time = ?, end_time = ?, registration_deadline = ?,
+                    capacity = ?, status = ?
+                WHERE event_id = ? AND club_id = ?
+            ");
+            $bindTypes = 'ssssssssisii';
+        } else {
+            $stmt = $db->prepare("
+                UPDATE events
+                SET title = ?, description = ?, category = ?, venue = ?,
+                    start_time = ?, end_time = ?, registration_deadline = ?,
+                    capacity = ?, status = ?
+                WHERE event_id = ? AND club_id = ?
+            ");
+            $bindTypes = 'sssssssisii';
+        }
+
+        $end = $endDateTime !== '' ? $endDateTime : null;
         $deadline = $registrationDeadline !== '' ? $registrationDeadline : null;
 
-        $stmt->bind_param(
-            'sssssssssii',
-            $title,
-            $description,
-            $category,
-            $venue,
-            $startTime,
-            $end,
-            $deadline,
-            $capacity,
-            $status,
-            $eventId,
-            $clubId
-        );
+        if ($poster !== null) {
+            $stmt->bind_param($bindTypes, $title, $description, $category, $poster, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
+        } else {
+            $stmt->bind_param($bindTypes, $title, $description, $category, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
+        }
 
         if ($stmt->execute()) {
+            $delFields = $db->prepare("DELETE FROM event_registration_fields WHERE event_id = ?");
+            $delFields->bind_param('i', $eventId);
+            $delFields->execute();
+
+            insertRegistrationFields($db, $eventId, $_POST['questions'] ?? []);
+
             $_SESSION['flash']['success'] = 'Event updated successfully.';
             redirect('/club/events');
         } else {
@@ -82,92 +110,237 @@ if (isPost()) {
     }
 }
 
+$evDate = isPost() ? post('date') : date('Y-m-d', strtotime($event['start_time']));
+$evStartTime = isPost() ? post('start_time') : date('H:i', strtotime($event['start_time']));
+$evEndTime = isPost() ? post('end_time') : ($event['end_time'] ? date('H:i', strtotime($event['end_time'])) : '');
+$evDeadline = isPost() ? post('registration_deadline') : ($event['registration_deadline'] ? date('Y-m-d\TH:i', strtotime($event['registration_deadline'])) : '');
+
+$existingFields = [];
+$fStmt = $db->prepare("SELECT * FROM event_registration_fields WHERE event_id = ? ORDER BY display_order");
+$fStmt->bind_param('i', $eventId);
+$fStmt->execute();
+$fResult = $fStmt->get_result();
+while ($fRow = $fResult->fetch_assoc()) {
+    $existingFields[] = $fRow;
+}
+
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
 require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 ?>
 <div class="flex-1 flex flex-col overflow-hidden">
-<?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
-<main class="flex-1 overflow-y-auto p-6 md:p-8">
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h2 class="text-xl font-bold text-gray-900">Edit Event</h2>
-            <p class="text-sm text-gray-500 mt-1">Update event details</p>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <nav class="breadcrumb mb-6">
+            <a href="<?= url('/club/events') ?>" class="breadcrumb-link">Events</a>
+            <span class="text-gray-400">/</span>
+            <span class="breadcrumb-current">Edit Event</span>
+        </nav>
+
+        <div class="page-header mb-6">
+            <div>
+                <h2 class="page-title">Edit Event</h2>
+                <p class="page-subtitle">Update event details</p>
+            </div>
         </div>
-        <a href="<?= url('/club/events') ?>" class="btn-secondary">Back to Events</a>
-    </div>
 
-    <?php foreach ($errors as $error): ?>
-    <div class="mb-2">
-        <?php
-        $alertType = 'error';
-        $alertMessage = $error;
-        require BASE_PATH . '/app/components/alert.php';
-        ?>
-    </div>
-    <?php endforeach; ?>
+        <?php foreach ($errors as $error): ?>
+            <?php
+            $alertType = 'error';
+            $alertMessage = $error;
+            require BASE_PATH . '/app/components/alert.php';
+            ?>
+        <?php endforeach; ?>
 
-    <div class="card p-6 max-w-2xl">
-        <form method="POST" class="space-y-5">
-            <div>
-                <label class="label">Event Title</label>
-                <input type="text" name="title" class="input" value="<?= e(isPost() ? post('title') : $event['title']) ?>" required>
-            </div>
-
-            <div>
-                <label class="label">Description</label>
-                <textarea name="description" rows="4" class="input" required><?= e(isPost() ? post('description') : $event['description']) ?></textarea>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="label">Category</label>
-                    <input type="text" name="category" class="input" value="<?= e(isPost() ? post('category') : $event['category']) ?>">
+        <form method="POST" enctype="multipart/form-data" class="card p-6 sm:p-8 space-y-8 max-w-2xl">
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Basic Information</h3>
+                <div class="space-y-4">
+                    <div class="form-group">
+                        <label class="label-required">Event Name</label>
+                        <input type="text" name="title" class="input" value="<?= e(isPost() ? post('title') : $event['title']) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Event Description</label>
+                        <textarea name="description" rows="4" class="textarea"><?= e(isPost() ? post('description') : $event['description']) ?></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Event Category</label>
+                        <select name="category" class="select">
+                            <option value="">Select category...</option>
+                            <?php foreach (['Workshop', 'Seminar', 'Competition', 'Contest', 'Bootcamp', 'Hackathon', 'Cultural', 'Showcase', 'Sports', 'Other'] as $cat): ?>
+                                <option value="<?= $cat ?>" <?= (isPost() ? post('category') : $event['category']) === $cat ? 'selected' : '' ?>><?= $cat ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Event Poster</label>
+                        <?php if (!empty($event['poster'])): ?>
+                            <div class="mb-2">
+                                <img src="<?= e($event['poster']) ?>" class="h-24 rounded-lg object-cover border border-gray-200">
+                            </div>
+                        <?php endif; ?>
+                        <input type="file" name="poster" accept="image/*" class="input">
+                        <p class="form-hint">Leave empty to keep the current poster. Accepted: JPG, PNG, WebP, GIF.</p>
+                    </div>
                 </div>
+            </section>
 
-                <div>
-                    <label class="label">Venue</label>
-                    <input type="text" name="venue" class="input" value="<?= e(isPost() ? post('venue') : $event['venue']) ?>" required>
+            <hr class="border-gray-200">
+
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Schedule</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label class="label-required">Date</label>
+                        <input type="date" name="date" class="input" value="<?= e($evDate) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="label-required">Start Time</label>
+                        <input type="time" name="start_time" class="input" value="<?= e($evStartTime) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">End Time</label>
+                        <input type="time" name="end_time" class="input" value="<?= e($evEndTime) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Registration Deadline</label>
+                        <input type="datetime-local" name="registration_deadline" class="input" value="<?= e($evDeadline) ?>">
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="label">Start Time</label>
-                    <input type="datetime-local" name="start_time" class="input" value="<?= e(isPost() ? post('start_time') : $event['start_time']) ?>" required>
+            <hr class="border-gray-200">
+
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Location</h3>
+                <div class="form-group">
+                    <label class="label-required">Venue</label>
+                    <input type="text" name="venue" class="input" value="<?= e(isPost() ? post('venue') : $event['venue']) ?>" placeholder="e.g. Auditorium, Lab 203" required>
+                    <p class="form-hint">Describe where the event takes place.</p>
                 </div>
+            </section>
 
-                <div>
-                    <label class="label">End Time</label>
-                    <input type="datetime-local" name="end_time" class="input" value="<?= e(isPost() ? post('end_time') : $event['end_time']) ?>">
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Capacity</h3>
+                <div class="form-group">
+                    <label class="label">Max Participants</label>
+                    <input type="number" name="capacity" class="input" value="<?= isPost() ? post('capacity') : (int) $event['capacity'] ?>" min="0">
                 </div>
-            </div>
+            </section>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="label">Registration Deadline</label>
-                    <input type="datetime-local" name="registration_deadline" class="input" value="<?= e(isPost() ? post('registration_deadline') : $event['registration_deadline']) ?>">
+            <hr class="border-gray-200">
+
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Registration Form</h3>
+                <p class="text-sm text-gray-500 mb-4">Every event automatically collects these fields from participants.</p>
+                <div class="card p-4 border border-blue-100 bg-blue-50/40 mb-4">
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li class="flex items-center gap-2"><?= icon('user', 'w-4 h-4 text-blue-600') ?> Full Name <span class="badge-danger">Required</span></li>
+                        <li class="flex items-center gap-2"><?= icon('mail', 'w-4 h-4 text-blue-600') ?> Email <span class="badge-danger">Required</span></li>
+                        <li class="flex items-center gap-2"><?= icon('ticket', 'w-4 h-4 text-blue-600') ?> Student ID <span class="badge-danger">Required</span></li>
+                        <li class="flex items-center gap-2"><?= icon('grad', 'w-4 h-4 text-blue-600') ?> Department <span class="text-xs text-gray-500">CSE, EEE, DS, English, BBA, EDS, Economics</span></li>
+                    </ul>
                 </div>
-
-                <div>
-                    <label class="label">Capacity</label>
-                    <input type="number" name="capacity" class="input" value="<?= isPost() ? post('capacity') : (int) $event['capacity'] ?>" min="0" required>
+                <p class="text-sm text-gray-500 mb-3">Custom fields for this event.</p>
+                <div id="questionsContainer" class="space-y-4">
+                    <?php
+                    $defaultLabels = ['Full Name', 'Email', 'Student ID', 'Department'];
+                    $typeLabels = ['short_text' => 'Short Text', 'long_text' => 'Long Text', 'number' => 'Number', 'email' => 'Email', 'dropdown' => 'Dropdown', 'radio' => 'Radio', 'checkbox' => 'Checkbox', 'date' => 'Date'];
+                    foreach ($existingFields as $f) {
+                        if (in_array($f['field_label'], $defaultLabels, true)) continue;
+                    ?>
+                    <div class="card p-4 space-y-3 question-row">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="form-group">
+                                <label class="label">Question Label</label>
+                                <input type="text" name="questions[label][]" class="input" value="<?= e($f['field_label']) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Field Type</label>
+                                <select name="questions[type][]" class="select">
+                                    <?php foreach ($typeLabels as $tKey => $tLabel): ?>
+                                        <option value="<?= $tKey ?>" <?= $f['field_type'] === $tKey ? 'selected' : '' ?>><?= $tLabel ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="label">Options <span class="form-hint">(comma-separated for dropdown/radio)</span></label>
+                            <input type="text" name="questions[options][]" class="input" value="<?= e($f['field_options']) ?>" placeholder="e.g. S, M, L, XL">
+                        </div>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="questions[required][]" value="1" class="rounded border-gray-300" <?= $f['is_required'] ? 'checked' : '' ?>>
+                            <span class="text-sm text-gray-700">Required</span>
+                        </label>
+                    </div>
+                    <?php } ?>
+                    <div class="card p-4 space-y-3 question-row">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="form-group">
+                                <label class="label">Question Label</label>
+                                <input type="text" name="questions[label][]" class="input" placeholder="e.g. T-shirt size">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Field Type</label>
+                                <select name="questions[type][]" class="select">
+                                    <option value="short_text">Short Text</option>
+                                    <option value="long_text">Long Text</option>
+                                    <option value="number">Number</option>
+                                    <option value="dropdown">Dropdown</option>
+                                    <option value="radio">Radio</option>
+                                    <option value="checkbox">Checkbox</option>
+                                    <option value="date">Date</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="label">Options <span class="form-hint">(comma-separated for dropdown/radio)</span></label>
+                            <input type="text" name="questions[options][]" class="input" placeholder="e.g. S, M, L, XL">
+                        </div>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="questions[required][]" value="1" class="rounded border-gray-300">
+                            <span class="text-sm text-gray-700">Required</span>
+                        </label>
+                    </div>
                 </div>
-            </div>
+                <button type="button" id="addQuestion" class="btn-secondary btn-sm mt-3">
+                    <?= icon('plus', 'w-4 h-4') ?> Add Question
+                </button>
+            </section>
 
-            <div>
-                <label class="label">Status</label>
-                <select name="status" class="input">
-                    <?php foreach (['draft', 'published', 'cancelled', 'completed'] as $s): ?>
-                    <option value="<?= $s ?>" <?= $event['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+            <hr class="border-gray-200">
+
+            <section>
+                <h3 class="text-base font-semibold text-gray-900 mb-4">Status</h3>
+                <div class="form-group">
+                    <label class="label">Event Status</label>
+                    <select name="status" class="select">
+                        <?php foreach (['draft', 'published', 'cancelled', 'completed'] as $s): ?>
+                            <option value="<?= $s ?>" <?= $event['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </section>
 
             <div class="flex gap-3">
                 <button type="submit" class="btn-primary">Update Event</button>
                 <a href="<?= url('/club/events') ?>" class="btn-secondary">Cancel</a>
             </div>
         </form>
-    </div>
-</main>
-<?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+    </main>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('addQuestion').addEventListener('click', function() {
+        var container = document.getElementById('questionsContainer');
+        var first = container.querySelector('.question-row');
+        var clone = first.cloneNode(true);
+        clone.querySelectorAll('input, select').forEach(function(el) {
+            if (el.type === 'checkbox') { el.checked = false; } else { el.value = ''; }
+        });
+        container.appendChild(clone);
+    });
+});
+</script>

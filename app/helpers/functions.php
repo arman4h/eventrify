@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/redirect.php';
+require_once __DIR__ . '/icons.php';
 
 function e(?string $value): string
 {
@@ -110,4 +111,58 @@ function requireSystemAdmin(): void
 function requireAdmin(): void
 {
     requireSystemAdmin();
+}
+
+function defaultRegistrationFields(): array
+{
+    return [
+        ['label' => 'Full Name', 'type' => 'text', 'options' => '', 'required' => 1],
+        ['label' => 'Email', 'type' => 'email', 'options' => '', 'required' => 1],
+        ['label' => 'Student ID', 'type' => 'text', 'options' => '', 'required' => 1],
+        ['label' => 'Department', 'type' => 'dropdown', 'options' => 'CSE,EEE,DS,English,BBA,EDS,Economics', 'required' => 1],
+    ];
+}
+
+function departmentOptions(): array
+{
+    return ['CSE', 'EEE', 'DS', 'English', 'BBA', 'EDS', 'Economics'];
+}
+
+function insertRegistrationFields(mysqli $db, int $eventId, array $posted): void
+{
+    $fieldStmt = $db->prepare("INSERT INTO event_registration_fields (event_id, field_label, field_type, field_options, is_required, display_order) VALUES (?, ?, ?, ?, ?, ?)");
+
+    $order = 1;
+    foreach (defaultRegistrationFields() as $df) {
+        $fieldStmt->bind_param('isssii', $eventId, $df['label'], $df['type'], $df['options'], $df['required'], $order);
+        $fieldStmt->execute();
+        $order++;
+    }
+
+    $qLabels = $posted['label'] ?? [];
+    $qTypes = $posted['type'] ?? [];
+    $qRequired = $posted['required'] ?? [];
+    $qOptions = $posted['options'] ?? [];
+
+    $typeMap = [
+        'short_text' => 'text',
+        'long_text' => 'text',
+        'number' => 'number',
+        'email' => 'email',
+        'dropdown' => 'dropdown',
+        'radio' => 'dropdown',
+        'checkbox' => 'checkbox',
+        'date' => 'date',
+    ];
+
+    for ($i = 0; $i < count($qLabels); $i++) {
+        $label = trim($qLabels[$i] ?? '');
+        if ($label === '') continue;
+        $type = $typeMap[trim($qTypes[$i] ?? '')] ?? 'text';
+        $required = isset($qRequired[$i]) ? 1 : 0;
+        $options = trim($qOptions[$i] ?? '');
+        $fieldStmt->bind_param('isssii', $eventId, $label, $type, $options, $required, $order);
+        $fieldStmt->execute();
+        $order++;
+    }
 }

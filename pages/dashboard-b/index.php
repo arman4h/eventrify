@@ -10,91 +10,204 @@ $activePage = 'overview';
 
 $clubId = (int) currentUser()['club_id'];
 
-$totalEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE club_id = $clubId")->fetch_assoc()['count'];
-$upcomingEvents = $db->query("SELECT COUNT(*) as count FROM events WHERE club_id = $clubId AND start_time >= NOW() AND status != 'cancelled'")->fetch_assoc()['count'];
-$totalRegistrations = $db->query("SELECT COUNT(*) as count FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = $clubId")->fetch_assoc()['count'];
-$featuredEvents = $db->query("SELECT * FROM events WHERE club_id = $clubId ORDER BY start_time ASC LIMIT 4");
+$hour = (int) date('H');
+$greeting = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
+
+$clubStmt = $db->prepare("SELECT club_name FROM clubs WHERE club_id = ?");
+$clubStmt->bind_param('i', $clubId);
+$clubStmt->execute();
+$clubName = ($clubStmt->get_result()->fetch_assoc())['club_name'] ?? 'Your Club';
+
+$totalEvents = $db->query("SELECT COUNT(*) as c FROM events WHERE club_id = $clubId")->fetch_assoc()['c'] ?? 0;
+$upcomingEvents = $db->query("SELECT COUNT(*) as c FROM events WHERE club_id = $clubId AND start_time >= NOW() AND status = 'published'")->fetch_assoc()['c'] ?? 0;
+$totalRegistrations = $db->query("SELECT COUNT(*) as c FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = $clubId")->fetch_assoc()['c'] ?? 0;
+$attendedCount = $db->query("SELECT COUNT(*) as c FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = $clubId AND er.status = 'attended'")->fetch_assoc()['c'] ?? 0;
+$attendanceRate = $totalRegistrations > 0 ? round(($attendedCount / $totalRegistrations) * 100) : '—';
+
+$upcomingList = $db->prepare("SELECT e.*, (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.event_id) as reg_count FROM events e WHERE e.club_id = ? AND e.start_time >= NOW() AND e.status = 'published' ORDER BY e.start_time ASC LIMIT 5");
+$upcomingList->bind_param('i', $clubId);
+$upcomingList->execute();
+$upcomingResult = $upcomingList->get_result();
+
+$recentRegs = $db->prepare("SELECT er.*, e.title as event_title FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = ? ORDER BY er.registered_at DESC LIMIT 5");
+$recentRegs->bind_param('i', $clubId);
+$recentRegs->execute();
+$recentRegsResult = $recentRegs->get_result();
 
 require BASE_PATH . '/app/layouts/dashboard-b/header.php';
 require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 ?>
 <div class="flex-1 flex flex-col overflow-hidden">
-<?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
-<main class="flex-1 overflow-y-auto p-6 md:p-8">
-    <div class="mb-8">
-        <h2 class="text-2xl font-bold text-gray-900">Welcome back, <?= e(currentUser()['name']) ?> 👋</h2>
-        <p class="text-sm text-gray-500 mt-1">Manage your club events and activities.</p>
-    </div>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <?php
+        $alertType = flash('success') ? 'success' : 'error';
+        $alertMessage = flash('success') ?: flash('error');
+        if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
+        ?>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-        <div class="card p-6 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            </div>
-            <div>
-                <p class="text-sm text-gray-500">Total Events</p>
-                <p class="text-2xl font-bold text-gray-900"><?= (int) $totalEvents ?></p>
-            </div>
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold text-gray-900"><?= $greeting ?>, <?= e($clubName) ?> 👋</h2>
+            <p class="text-sm text-gray-500 mt-1">Here's what's happening with your club.</p>
         </div>
 
-        <div class="card p-6 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-            <div>
-                <p class="text-sm text-gray-500">Upcoming</p>
-                <p class="text-2xl font-bold text-gray-900"><?= (int) $upcomingEvents ?></p>
-            </div>
-        </div>
-
-        <div class="card p-6 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </div>
-            <div>
-                <p class="text-sm text-gray-500">Registrations</p>
-                <p class="text-2xl font-bold text-gray-900"><?= (int) $totalRegistrations ?></p>
-            </div>
-        </div>
-    </div>
-
-    <div class="mb-6 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-gray-900">Upcoming Events</h3>
-        <a href="<?= url('/club/events') ?>" class="text-sm font-medium text-primary-600 hover:text-primary-500">View all →</a>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <?php if ($featuredEvents->num_rows === 0): ?>
-        <div class="card p-10 text-center lg:col-span-4">
-            <p class="text-gray-500 mb-4">No events yet.</p>
-            <a href="<?= url('/club/events/create') ?>" class="btn-primary">Create your first event</a>
-        </div>
-        <?php else: while ($event = $featuredEvents->fetch_assoc()): ?>
-        <div class="card overflow-hidden hover:shadow-lg transition-shadow">
-            <div class="h-10 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-            <div class="p-5">
-                <h4 class="font-semibold text-gray-900 mb-1"><?= e($event['title']) ?></h4>
-                <p class="text-sm text-gray-500 mb-3 line-clamp-2"><?= e($event['description']) ?></p>
-                <div class="flex items-center gap-4 text-xs text-gray-500 mb-4">
-                    <span class="inline-flex items-center">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <?= formatDate($event['start_time']) ?>
-                    </span>
-                    <span class="inline-flex items-center">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        <?= e($event['venue']) ?>
-                    </span>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="stat-card">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <?= icon('calendar', 'w-5 h-5') ?>
+                    </div>
+                    <div>
+                        <p class="stat-label">Total Events</p>
+                        <p class="stat-value"><?= (int) $totalEvents ?></p>
+                    </div>
                 </div>
-                <div class="flex gap-2">
-                    <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="text-xs font-medium text-primary-600 hover:text-primary-700">Edit</a>
-                    <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
-                        <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
-                        <button type="submit" class="text-xs font-medium text-red-600 hover:text-red-700" data-confirm="Delete this event?">Delete</button>
-                    </form>
+            </div>
+            <div class="stat-card">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <?= icon('trending', 'w-5 h-5') ?>
+                    </div>
+                    <div>
+                        <p class="stat-label">Upcoming Events</p>
+                        <p class="stat-value"><?= (int) $upcomingEvents ?></p>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                        <?= icon('users', 'w-5 h-5') ?>
+                    </div>
+                    <div>
+                        <p class="stat-label">Total Registrations</p>
+                        <p class="stat-value"><?= (int) $totalRegistrations ?></p>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <?= icon('check-circle', 'w-5 h-5') ?>
+                    </div>
+                    <div>
+                        <p class="stat-label">Attendance Rate</p>
+                        <p class="stat-value"><?= $attendanceRate === '—' ? '—' : $attendanceRate . '%' ?></p>
+                    </div>
                 </div>
             </div>
         </div>
-        <?php endwhile; endif; ?>
-    </div>
-</main>
-<?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+
+        <div class="flex flex-wrap gap-3 mb-8">
+            <a href="<?= url('/club/events/create') ?>" class="btn-primary">
+                <?= icon('plus', 'w-4 h-4') ?> Create Event
+            </a>
+            <a href="<?= url('/club/registrations') ?>" class="btn-secondary">
+                <?= icon('clipboard', 'w-4 h-4') ?> Manage Registrations
+            </a>
+            <a href="<?= url('/club/attendance') ?>" class="btn-secondary">
+                <?= icon('qr', 'w-4 h-4') ?> Check Attendance
+            </a>
+            <a href="<?= url('/club/room-requests') ?>" class="btn-secondary">
+                <?= icon('building', 'w-4 h-4') ?> Request Room
+            </a>
+        </div>
+
+        <div class="card p-5 mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Upcoming Events</h3>
+                <a href="<?= url('/club/events') ?>" class="text-sm font-medium text-primary-600 hover:text-primary-500">View all →</a>
+            </div>
+            <?php if ($upcomingResult->num_rows === 0): ?>
+                <?php
+                $emptyIcon = 'calendar';
+                $emptyTitle = 'No upcoming events';
+                $emptyText = 'Create your first event to get started.';
+                $emptyHref = url('/club/events/create');
+                $emptyAction = 'Create Event';
+                require BASE_PATH . '/app/components/empty-state.php';
+                ?>
+            <?php else: ?>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Registrations</th>
+                                <th>Capacity</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($ev = $upcomingResult->fetch_assoc()): ?>
+                            <tr>
+                                <td>
+                                    <div class="font-medium text-gray-900"><?= e($ev['title']) ?></div>
+                                    <div class="text-xs text-gray-500"><?= e(mb_strimwidth($ev['description'] ?? '', 0, 50, '…')) ?></div>
+                                </td>
+                                <td class="whitespace-nowrap"><?= formatDate($ev['start_time']) ?></td>
+                                <td><?= (int) $ev['reg_count'] ?></td>
+                                <td><?= (int) $ev['capacity'] ?></td>
+                                <td><span class="badge-success">Published</span></td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex gap-2">
+                                        <a href="<?= url('/club/events/manage?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">View</a>
+                                        <a href="<?= url('/club/registrations?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">Manage</a>
+                                        <a href="<?= url('/club/events/edit?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">Edit</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="card p-5">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Registrations</h3>
+            <?php if ($recentRegsResult->num_rows === 0): ?>
+                <p class="text-sm text-gray-500 text-center py-6">No registrations yet.</p>
+            <?php else: ?>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Participant</th>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($reg = $recentRegsResult->fetch_assoc()): ?>
+                            <tr>
+                                <td class="font-medium text-gray-900"><?= e($reg['guest_name'] ?: 'ID: ' . $reg['guest_student_id']) ?></td>
+                                <td><?= e($reg['event_title']) ?></td>
+                                <td class="whitespace-nowrap"><?= formatDate($reg['registered_at']) ?></td>
+                                <td>
+                                    <?php
+                                    $rs = $reg['status'] ?? 'registered';
+                                    $rb = match($rs) {
+                                        'registered' => 'badge-info',
+                                        'waitlisted' => 'badge-warning',
+                                        'attended' => 'badge-success',
+                                        'cancelled' => 'badge-danger',
+                                        'no_show' => 'badge-neutral',
+                                        default => 'badge-neutral',
+                                    };
+                                    ?>
+                                    <span class="<?= $rb ?>"><?= ucfirst(e($rs)) ?></span>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </main>
+    <?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
+</div>
