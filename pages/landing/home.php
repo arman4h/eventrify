@@ -36,7 +36,9 @@ require BASE_PATH . '/app/layouts/landing/header.php';
         <p class="max-w-2xl mx-auto text-white/80 text-base md:text-lg mb-8">
             Eventrify helps you find upcoming university events from every club on campus.
             Browse what's happening, register your interest, and never miss out again.
-        </p>
+        </p> 
+        
+        
 
         <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
             <a href="<?= url('/events') ?>" class="btn bg-white text-primary-700 hover:bg-gray-100 px-8 py-3 text-base w-full sm:w-auto">

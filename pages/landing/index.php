@@ -86,10 +86,10 @@ require BASE_PATH . '/app/layouts/landing/header.php';
         ?>
     </div>
     <?php else: ?>
-    <div class="card p-12 text-center">
-        <p class="text-gray-500 mb-4">No events found.</p>
-        <a href="<?= url('/events') ?>" class="btn-secondary">View all events</a>
-    </div>
+        <div class="card p-12 text-center">
+            <p class="text-gray-500 mb-4">No events found.</p>
+            <a href="<?= url('/event') ?>" class="btn-secondary">View all events</a>
+        </div>
     <?php endif; ?>
 </section>
 

@@ -315,7 +315,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                     $rows[] = [
                         e($event['title']),
                         e($event['venue']),
-                        formatDate($event['event_date']),
+                        formatDate($event['start_time']),
                         e($event['status'] ?? 'upcoming'),
                     ];
 

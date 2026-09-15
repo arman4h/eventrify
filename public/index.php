@@ -9,7 +9,7 @@ $uri = trim($requestUri, '/');
 $routes = [
     ''                               => '/pages/landing/home.php',
     'home'                           => '/pages/landing/home.php',
-    'events'                         => '/pages/landing/index.php',
+    'events'                         => '/pages/landing/event.php',
     'event'                          => '/pages/landing/event.php',
 
     'login'                          => '/pages/auth/login.php',
