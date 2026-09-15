@@ -12,8 +12,10 @@ if ($clubId <= 0) {
 }
 
 $stmt = $db->prepare("
-    SELECT c.club_id, c.club_name, c.description, c.logo, c.status, c.created_at, c.reviewed_at,
-        cu.full_name AS owner_name, cu.email AS owner_email, cu.phone AS owner_phone, cu.role AS owner_role
+    SELECT c.club_id, c.club_name, c.description, c.logo, c.university, c.club_type, c.established_year,
+        c.official_email, c.website, c.facebook, c.social_links, c.status, c.created_at, c.reviewed_at,
+        cu.full_name AS owner_name, cu.email AS owner_email, cu.phone AS owner_phone, cu.role AS owner_role,
+        cu.student_id AS owner_student_id, cu.position AS owner_position, cu.university_email AS owner_university_email
     FROM clubs c
     LEFT JOIN club_users cu ON cu.club_user_id = c.requested_by
     WHERE c.club_id = ?
@@ -117,9 +119,18 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                 <div class="card p-6">
                     <h3 class="text-base font-semibold text-gray-900 mb-4">Club Information</h3>
                     <div class="flex items-start gap-4">
+                        <?php if (!empty($club['logo'])): ?>
+                        <img src="<?= e($club['logo']) ?>" alt="<?= e($club['club_name']) ?> logo" class="w-14 h-14 rounded-xl object-cover bg-gray-100 shrink-0">
+                        <?php else: ?>
                         <span class="w-14 h-14 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center shrink-0"><?= icon('image', 'w-7 h-7') ?></span>
+                        <?php endif; ?>
                         <div class="flex-1 min-w-0">
-                            <p class="text-lg font-bold text-gray-900"><?= e($club['club_name']) ?></p>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <p class="text-lg font-bold text-gray-900"><?= e($club['club_name']) ?></p>
+                                <?php if (!empty($club['club_type'])): ?>
+                                <span class="badge badge-info text-xs"><?= e($club['club_type']) ?></span>
+                                <?php endif; ?>
+                            </div>
                             <p class="text-sm text-gray-600 leading-relaxed mt-1">
                                 <?= e($club['description'] !== null && $club['description'] !== '' ? $club['description'] : 'No description provided.') ?>
                             </p>
@@ -128,12 +139,20 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 pt-5 border-t border-gray-100">
                         <div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Submitted On</p>
-                            <p class="text-sm text-gray-700"><?= formatDate($club['created_at'], 'M d, Y h:i A') ?></p>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">University</p>
+                            <p class="text-sm text-gray-700"><?= e($club['university'] ?: '—') ?></p>
                         </div>
                         <div>
                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Established Year</p>
-                            <p class="text-sm text-gray-700"><?= formatDate($club['created_at'], 'Y') ?></p>
+                            <p class="text-sm text-gray-700"><?= e($club['established_year'] ?: '—') ?></p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Club Type</p>
+                            <p class="text-sm text-gray-700"><?= e($club['club_type'] ?: '—') ?></p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Submitted On</p>
+                            <p class="text-sm text-gray-700"><?= formatDate($club['created_at'], 'M d, Y h:i A') ?></p>
                         </div>
                     </div>
                 </div>
@@ -147,19 +166,19 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                         </div>
                         <div>
                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Student ID</p>
-                            <p class="text-sm text-gray-700">—</p>
+                            <p class="text-sm text-gray-700"><?= e($club['owner_student_id'] ?: '—') ?></p>
                         </div>
                         <div>
                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Position</p>
-                            <p class="text-sm text-gray-700 capitalize"><?= e($club['owner_role'] ?? 'Owner') ?></p>
+                            <p class="text-sm text-gray-700"><?= e($club['owner_position'] ?: ucfirst((string) $club['owner_role'])) ?></p>
                         </div>
                         <div>
                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phone</p>
                             <p class="text-sm text-gray-700"><?= e($club['owner_phone'] ?? '—') ?></p>
                         </div>
                         <div class="sm:col-span-2">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email</p>
-                            <p class="text-sm text-gray-700"><?= e($club['owner_email'] ?? '—') ?></p>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">University Email</p>
+                            <p class="text-sm text-gray-700"><?= e($club['owner_university_email'] ?: $club['owner_email']) ?></p>
                         </div>
                     </div>
                 </div>
@@ -168,38 +187,30 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                     <h3 class="text-base font-semibold text-gray-900 mb-4">Official Links</h3>
                     <ul class="space-y-3 text-sm">
                         <li class="flex items-center justify-between gap-3">
+                            <span class="text-gray-600">Official Email</span>
+                            <span class="text-gray-700 font-medium break-all text-right"><?= e($club['official_email'] ?: $club['owner_email']) ?></span>
+                        </li>
+                        <li class="flex items-center justify-between gap-3">
                             <span class="text-gray-600">Website</span>
+                            <?php if (!empty($club['website'])): ?>
+                            <a href="<?= e($club['website']) ?>" target="_blank" rel="noopener" class="text-blue-600 hover:underline truncate"><?= e($club['website']) ?></a>
+                            <?php else: ?>
                             <span class="text-gray-400">—</span>
+                            <?php endif; ?>
                         </li>
                         <li class="flex items-center justify-between gap-3">
                             <span class="text-gray-600">Facebook</span>
+                            <?php if (!empty($club['facebook'])): ?>
+                            <a href="<?= e($club['facebook']) ?>" target="_blank" rel="noopener" class="text-blue-600 hover:underline truncate"><?= e($club['facebook']) ?></a>
+                            <?php else: ?>
                             <span class="text-gray-400">—</span>
+                            <?php endif; ?>
                         </li>
                         <li class="flex items-center justify-between gap-3">
                             <span class="text-gray-600">Social</span>
-                            <span class="text-gray-400">—</span>
+                            <span class="text-gray-700 font-medium text-right <?= empty($club['social_links']) ? 'text-gray-400' : '' ?>"><?= e($club['social_links'] ?: '—') ?></span>
                         </li>
                     </ul>
-                </div>
-
-                <div class="card p-6">
-                    <h3 class="text-base font-semibold text-gray-900 mb-4">Verification Documents</h3>
-                    <div class="space-y-3">
-                        <div class="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 p-4">
-                            <span class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><?= icon('file', 'w-4 h-4') ?></span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-800">Advisor letter.pdf</p>
-                                <p class="text-xs text-gray-500">Pending upload</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 p-4">
-                            <span class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><?= icon('file', 'w-4 h-4') ?></span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-800">Proposed constitution.pdf</p>
-                                <p class="text-xs text-gray-500">Pending upload</p>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
             </div>

@@ -52,25 +52,29 @@ INSERT INTO students (university_id, full_name, email, password_hash, department
 -- ────────────────────────────────────────────────────────────
 -- Demo clubs
 -- ────────────────────────────────────────────────────────────
-INSERT INTO clubs (club_name, description, status, reviewed_at, created_at) VALUES
-('UIU Robotics Club', 'A student-run club dedicated to robotics, automation and hands-on engineering projects.', 'approved', NOW(), NOW() - INTERVAL 400 DAY),
-('UIU Programming League', 'The competitive programming community of UIU. We train, host contests and go to ICPC.', 'approved', NOW(), NOW() - INTERVAL 350 DAY),
-('UIU AI & Machine Learning Club', 'Exploring artificial intelligence, machine learning and data science through workshops and research.', 'approved', NOW(), NOW() - INTERVAL 300 DAY),
-('UIU Cultural Society', 'Celebrating diversity through music, drama, art and cultural programs.', 'pending', NULL, NOW() - INTERVAL 7 DAY),
-('UIU Business & Entrepreneurship Club', 'Fostering entrepreneurial thinking through case competitions, startup talks and networking.', 'pending', NULL, NOW() - INTERVAL 3 DAY);
+INSERT INTO clubs (club_name, description, university, club_type, established_year, official_email, website, facebook, social_links, status, reviewed_at, created_at) VALUES
+('UIU Robotics Club', 'A student-run club dedicated to robotics, automation and hands-on engineering projects.', 'United International University', 'Technical', 2018, 'robotics@uiu.edu.bd', 'https://robotics.uiu.edu.bd', 'https://facebook.com/uiu.robotics', 'Instagram: @uiu.robotics', 'approved', NOW(), NOW() - INTERVAL 400 DAY),
+('UIU Programming League', 'The competitive programming community of UIU. We train, host contests and go to ICPC.', 'United International University', 'Technical', 2019, 'programming@uiu.edu.bd', '', 'https://facebook.com/uiu.programming', '', 'approved', NOW(), NOW() - INTERVAL 350 DAY),
+('UIU AI & Machine Learning Club', 'Exploring artificial intelligence, machine learning and data science through workshops and research.', 'United International University', 'Academic', 2022, 'ai.ml@uiu.edu.bd', 'https://aiml.uiu.edu.bd', 'https://facebook.com/uiu.aiml', '', 'approved', NOW(), NOW() - INTERVAL 300 DAY),
+('UIU Cultural Society', 'Celebrating diversity through music, drama, art and cultural programs.', 'United International University', 'Cultural', 2015, 'cultural@uiu.edu.bd', '', 'https://facebook.com/uiu.cultural', '', 'pending', NULL, NOW() - INTERVAL 7 DAY),
+('UIU Business & Entrepreneurship Club', 'Fostering entrepreneurial thinking through case competitions, startup talks and networking.', 'United International University', 'Social', 2020, 'business@uiu.edu.bd', '', 'https://facebook.com/uiu.business', 'LinkedIn: uiubusiness', 'pending', NULL, NOW() - INTERVAL 3 DAY);
 
 -- ────────────────────────────────────────────────────────────
 -- Demo club users
 -- ────────────────────────────────────────────────────────────
-INSERT INTO club_users (club_id, full_name, email, password_hash, phone, role, status) VALUES
-(1, 'Mahi Islam', 'mahi@gmail.com', '$2y$10$RXNrxkHe1TZZDMZwLYt5IueR6kOjO6bd4xWOH9vdFvfU0XfBpunbW', '+8801712345000', 'owner', 'active'),
-(1, 'Fahim Karim', 'fahim.robotics@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801712345111', 'admin', 'active'),
-(2, 'Tasnim Ahmed', 'tasnim.prog@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801811122000', 'owner', 'active'),
-(3, 'Sadia Kabir', 'sadia.ai@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801911222333', 'owner', 'active');
+INSERT INTO club_users (club_id, full_name, email, password_hash, phone, student_id, position, university_email, role, status) VALUES
+(1, 'Mahi Islam', 'mahi@gmail.com', '$2y$10$RXNrxkHe1TZZDMZwLYt5IueR6kOjO6bd4xWOH9vdFvfU0XfBpunbW', '+8801712345000', '0112210001', 'President', 'mahi.islam@bscse.uiu.ac.bd', 'owner', 'active'),
+(1, 'Fahim Karim', 'fahim.robotics@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801712345111', '0112210002', 'Vice President', 'fahim.karim@bscse.uiu.ac.bd', 'admin', 'active'),
+(2, 'Tasnim Ahmed', 'tasnim.prog@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801811122000', '0112220001', 'President', 'tasnim.ahmed@bscse.uiu.ac.bd', 'owner', 'active'),
+(3, 'Sadia Kabir', 'sadia.ai@example.com', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801911222333', '0112230001', 'President', 'sadia.kabir@bscse.uiu.ac.bd', 'owner', 'active'),
+(4, 'Nusrat Jahan', 'nusrat.cultural@uiu.edu.bd', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801612345678', '0112440567', 'President', 'nusrat.jahan@bscse.uiu.ac.bd', 'owner', 'active'),
+(5, 'Tanvir Rahman', 'tanvir.business@uiu.edu.bd', '$2y$10$xCKJn5uN49hsKLzkKC9l4.coCtFSJSRro8QenqyU1ttMvwF/5r5mm', '+8801512345678', '0112550123', 'Vice President', 'tanvir.rahman@bba.uiu.ac.bd', 'owner', 'active');
 
 UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'mahi@gmail.com') WHERE club_id = 1;
 UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'tasnim.prog@example.com') WHERE club_id = 2;
 UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'sadia.ai@example.com') WHERE club_id = 3;
+UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'nusrat.cultural@uiu.edu.bd') WHERE club_id = 4;
+UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'tanvir.business@uiu.edu.bd') WHERE club_id = 5;
 
 -- ────────────────────────────────────────────────────────────
 -- Demo events
@@ -140,3 +144,103 @@ INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_ti
 INSERT INTO reports (reporter_id, reported_club_id, reported_event_id, subject, description, status, created_at) VALUES
 (1, 1, 2, 'Registration confirmation missing', 'I registered for the robotics competition but never received a confirmation email.', 'open', NOW() - INTERVAL 1 DAY),
 (2, NULL, NULL, 'Suggest feature: calendar sync', 'It would be great if registered events could be added to Google Calendar.', 'under_review', NOW() - INTERVAL 4 DAY);
+
+-- ════════════════════════════════════════════════════════════
+-- Club registration request expansion
+-- Adds the remaining fields collected by the club registration
+-- form (university, club type, established year, links, logo,
+-- applicant student id / position / university email) plus the
+-- verification-documents table. Safe to run again (idempotent).
+-- ════════════════════════════════════════════════════════════
+ALTER TABLE clubs
+    ADD COLUMN IF NOT EXISTS university       VARCHAR(150) AFTER club_name,
+    ADD COLUMN IF NOT EXISTS club_type        VARCHAR(50) AFTER university,
+    ADD COLUMN IF NOT EXISTS established_year SMALLINT AFTER club_type,
+    ADD COLUMN IF NOT EXISTS official_email   VARCHAR(100) AFTER description,
+    ADD COLUMN IF NOT EXISTS website          VARCHAR(255) AFTER official_email,
+    ADD COLUMN IF NOT EXISTS facebook         VARCHAR(255) AFTER website,
+    ADD COLUMN IF NOT EXISTS social_links     VARCHAR(255) AFTER facebook;
+
+ALTER TABLE clubs MODIFY COLUMN logo LONGTEXT NULL;
+
+ALTER TABLE club_users
+    ADD COLUMN IF NOT EXISTS student_id       VARCHAR(20) AFTER phone,
+    ADD COLUMN IF NOT EXISTS position         VARCHAR(50) AFTER student_id,
+    ADD COLUMN IF NOT EXISTS university_email VARCHAR(100) AFTER position;
+
+-- Backfill demo data for the already-seeded demo clubs/users
+UPDATE clubs SET
+    university = 'United International University',
+    club_type = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 'Technical'
+        WHEN 'UIU Programming League' THEN 'Technical'
+        WHEN 'UIU AI & Machine Learning Club' THEN 'Academic'
+        WHEN 'UIU Cultural Society' THEN 'Cultural'
+        WHEN 'UIU Business & Entrepreneurship Club' THEN 'Social'
+        ELSE club_type END,
+    established_year = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 2018
+        WHEN 'UIU Programming League' THEN 2019
+        WHEN 'UIU AI & Machine Learning Club' THEN 2022
+        WHEN 'UIU Cultural Society' THEN 2015
+        WHEN 'UIU Business & Entrepreneurship Club' THEN 2020
+        ELSE established_year END,
+    official_email = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 'robotics@uiu.edu.bd'
+        WHEN 'UIU Programming League' THEN 'programming@uiu.edu.bd'
+        WHEN 'UIU AI & Machine Learning Club' THEN 'ai.ml@uiu.edu.bd'
+        WHEN 'UIU Cultural Society' THEN 'cultural@uiu.edu.bd'
+        WHEN 'UIU Business & Entrepreneurship Club' THEN 'business@uiu.edu.bd'
+        ELSE official_email END,
+    website = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 'https://robotics.uiu.edu.bd'
+        WHEN 'UIU AI & Machine Learning Club' THEN 'https://aiml.uiu.edu.bd'
+        ELSE website END,
+    facebook = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 'https://facebook.com/uiu.robotics'
+        WHEN 'UIU Programming League' THEN 'https://facebook.com/uiu.programming'
+        WHEN 'UIU AI & Machine Learning Club' THEN 'https://facebook.com/uiu.aiml'
+        WHEN 'UIU Cultural Society' THEN 'https://facebook.com/uiu.cultural'
+        WHEN 'UIU Business & Entrepreneurship Club' THEN 'https://facebook.com/uiu.business'
+        ELSE facebook END,
+    social_links = CASE club_name
+        WHEN 'UIU Robotics Club' THEN 'Instagram: @uiu.robotics'
+        WHEN 'UIU Business & Entrepreneurship Club' THEN 'LinkedIn: uiubusiness'
+        ELSE social_links END
+WHERE club_name IN (
+    'UIU Robotics Club', 'UIU Programming League', 'UIU AI & Machine Learning Club',
+    'UIU Cultural Society', 'UIU Business & Entrepreneurship Club'
+);
+
+UPDATE club_users SET
+    university_email = CASE email
+        WHEN 'mahi@gmail.com' THEN 'mahi.islam@bscse.uiu.ac.bd'
+        WHEN 'fahim.robotics@example.com' THEN 'fahim.karim@bscse.uiu.ac.bd'
+        WHEN 'tasnim.prog@example.com' THEN 'tasnim.ahmed@bscse.uiu.ac.bd'
+        WHEN 'sadia.ai@example.com' THEN 'sadia.kabir@bscse.uiu.ac.bd'
+        WHEN 'nusrat.cultural@uiu.edu.bd' THEN 'nusrat.jahan@bscse.uiu.ac.bd'
+        WHEN 'tanvir.business@uiu.edu.bd' THEN 'tanvir.rahman@bba.uiu.ac.bd'
+        ELSE university_email END,
+    student_id = CASE email
+        WHEN 'mahi@gmail.com' THEN '0112210001'
+        WHEN 'fahim.robotics@example.com' THEN '0112210002'
+        WHEN 'tasnim.prog@example.com' THEN '0112220001'
+        WHEN 'sadia.ai@example.com' THEN '0112230001'
+        WHEN 'nusrat.cultural@uiu.edu.bd' THEN '0112440567'
+        ELSE student_id END,
+    position = CASE email
+        WHEN 'mahi@gmail.com' THEN 'President'
+        WHEN 'fahim.robotics@example.com' THEN 'Vice President'
+        WHEN 'tasnim.prog@example.com' THEN 'President'
+        WHEN 'sadia.ai@example.com' THEN 'President'
+        WHEN 'nusrat.cultural@uiu.edu.bd' THEN 'President'
+        WHEN 'tanvir.business@uiu.edu.bd' THEN 'Vice President'
+        ELSE position END
+WHERE email IN (
+    'mahi@gmail.com', 'fahim.robotics@example.com', 'tasnim.prog@example.com',
+    'sadia.ai@example.com', 'nusrat.cultural@uiu.edu.bd', 'tanvir.business@uiu.edu.bd'
+);
+
+-- Ensure pending demo clubs 4 & 5 are linked to their owner applicants
+UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'nusrat.cultural@uiu.edu.bd') WHERE club_id = 4;
+UPDATE clubs SET requested_by = (SELECT club_user_id FROM club_users WHERE email = 'tanvir.business@uiu.edu.bd') WHERE club_id = 5;

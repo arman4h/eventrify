@@ -128,6 +128,32 @@ function departmentOptions(): array
     return ['CSE', 'EEE', 'DS', 'English', 'BBA', 'EDS', 'Economics'];
 }
 
+function departmentIdPrefixes(): array
+{
+    return [
+        'CSE' => '011',
+        'EEE' => '012',
+        'DS' => '015',
+        'English' => '211',
+        'BBA' => '215',
+        'EDS' => '133',
+    ];
+}
+
+function departmentCode(string $dept): string
+{
+    $map = [
+        'Computer Science & Engineering' => 'CSE',
+        'Electrical & Electronic Engineering' => 'EEE',
+        'Data Science' => 'DS',
+        'English' => 'English',
+        'Business Administration' => 'BBA',
+        'Economics' => 'Economics',
+        'EDS' => 'EDS',
+    ];
+    return $map[$dept] ?? (in_array($dept, departmentOptions(), true) ? $dept : '');
+}
+
 function insertRegistrationFields(mysqli $db, int $eventId, array $posted): void
 {
     $fieldStmt = $db->prepare("INSERT INTO event_registration_fields (event_id, field_label, field_type, field_options, is_required, display_order) VALUES (?, ?, ?, ?, ?, ?)");

@@ -16,8 +16,6 @@ if (isPost()) {
     $fullName     = post('full_name');
     $email        = post('email');
     $department   = post('department');
-    $program      = post('program');
-    $batch        = post('batch');
     $phone        = post('phone');
     $password     = post('password');
     $confirm      = post('confirm_password');
@@ -43,51 +41,55 @@ if (isPost()) {
         $errors[] = 'You must agree to the Terms and Privacy Policy to register.';
     }
 
+    if ($department !== '') {
+        $prefixes = departmentIdPrefixes();
+        $prefix = $prefixes[$department] ?? null;
+
+        if ($prefix !== null && substr($universityId, 0, 3) !== $prefix) {
+            $errors[] = 'Student ID must start with ' . $prefix . ' for the ' . $department . ' department.';
+        }
+    }
+
+    $checkEmail = $db->prepare("SELECT student_id FROM students WHERE email = ? LIMIT 1");
+    $checkEmail->bind_param('s', $email);
+    $checkEmail->execute();
+    $checkEmail->store_result();
+
+    $checkId = $db->prepare("SELECT student_id FROM students WHERE university_id = ? LIMIT 1");
+    $checkId->bind_param('s', $universityId);
+    $checkId->execute();
+    $checkId->store_result();
+
+    if ($checkEmail->num_rows > 0) {
+        $errors[] = 'An account with that email already exists.';
+    }
+
+    if ($checkId->num_rows > 0) {
+        $errors[] = 'A student with that university ID already exists.';
+    }
+
     if (empty($errors)) {
-        $checkEmail = $db->prepare("SELECT student_id FROM students WHERE email = ? LIMIT 1");
-        $checkEmail->bind_param('s', $email);
-        $checkEmail->execute();
-        $checkEmail->store_result();
+        $hashed = password_hash($password, PASSWORD_DEFAULT);
 
-        $checkId = $db->prepare("SELECT student_id FROM students WHERE university_id = ? LIMIT 1");
-        $checkId->bind_param('s', $universityId);
-        $checkId->execute();
-        $checkId->store_result();
+        $stmt = $db->prepare("
+            INSERT INTO students (university_id, full_name, email, password_hash, department, phone, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+        ");
+        $stmt->bind_param(
+            'ssssss',
+            $universityId,
+            $fullName,
+            $email,
+            $hashed,
+            $department,
+            $phone
+        );
 
-        if ($checkEmail->num_rows > 0) {
-            $errors[] = 'An account with that email already exists.';
-        }
-
-        if ($checkId->num_rows > 0) {
-            $errors[] = 'A student with that university ID already exists.';
-        }
-
-        if (empty($errors)) {
-            $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $interests = $program;
-
-            $stmt = $db->prepare("
-                INSERT INTO students (university_id, full_name, email, password_hash, department, batch, phone, interests, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-            ");
-            $stmt->bind_param(
-                'ssssssss',
-                $universityId,
-                $fullName,
-                $email,
-                $hashed,
-                $department,
-                $batch,
-                $phone,
-                $interests
-            );
-
-            if ($stmt->execute()) {
-                $registeredEmail = $email;
-                setOld([]);
-            } else {
-                $errors[] = 'Registration failed. Please try again.';
-            }
+        if ($stmt->execute()) {
+            $registeredEmail = $email;
+            setOld([]);
+        } else {
+            $errors[] = 'Registration failed. Please try again.';
         }
     }
 }
@@ -144,28 +146,26 @@ $pageTitle = 'Create Account';
                     <div class="form-group">
                         <label for="email" class="label label-required">University Email</label>
                         <input type="email" id="email" name="email" class="input" placeholder="your.name@university.edu" value="<?= e(post('email')) ?>" required>
+                        <?php if (in_array('An account with that email already exists.', $errors, true)): ?>
+                            <p class="text-xs text-red-600 mt-1"><?= icon('x-circle', 'w-3.5 h-3.5 inline -mt-0.5') ?> This email is already registered.</p>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="department" class="label label-required">Department</label>
+                        <select id="department" name="department" class="select" required>
+                            <option value="">Select your department...</option>
+                            <?php foreach (departmentOptions() as $dept): ?>
+                                <option value="<?= e($dept) ?>" <?= post('department') === $dept ? 'selected' : '' ?>><?= e($dept) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="form-group">
                         <label for="university_id" class="label label-required">Student ID</label>
                         <input type="text" id="university_id" name="university_id" class="input" placeholder="e.g. 0112211234" value="<?= e(post('university_id')) ?>" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="department" class="label label-required">Department</label>
-                        <input type="text" id="department" name="department" class="input" placeholder="Computer Science & Engineering" value="<?= e(post('department')) ?>" required>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="form-group">
-                            <label for="program" class="label">Program</label>
-                            <input type="text" id="program" name="program" class="input" placeholder="BSc in CSE" value="<?= e(post('program')) ?>">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="batch" class="label">Trimester/Semester</label>
-                            <input type="text" id="batch" name="batch" class="input" placeholder="e.g. Summer 2025" value="<?= e(post('batch')) ?>">
-                        </div>
+                        <p class="form-hint" id="id-prefix-hint">Student ID starts with your department prefix.</p>
+                        <p class="text-xs text-red-600 mt-1 hidden" id="id-prefix-error"></p>
                     </div>
 
                     <div class="form-group">
@@ -200,5 +200,44 @@ $pageTitle = 'Create Account';
 
     <p class="mt-6 text-sm text-gray-500">&copy; <?= date('Y') ?> Eventrify &middot; University Club Events</p>
     <script src="<?= url('/assets/js/app.js') ?>"></script>
+    <script>
+    (function () {
+        var prefixMap = <?= json_encode(departmentIdPrefixes()) ?>;
+        var dept = document.getElementById('department');
+        var idInput = document.getElementById('university_id');
+        var hint = document.getElementById('id-prefix-hint');
+        var errorEl = document.getElementById('id-prefix-error');
+        if (!dept || !idInput || !hint || !errorEl) return;
+
+        function check() {
+            var prefix = prefixMap[dept.value] || null;
+            if (!prefix) {
+                hint.textContent = 'Student ID starts with your department prefix.';
+                hint.classList.remove('hidden');
+                errorEl.classList.add('hidden');
+                return;
+            }
+            var val = idInput.value.trim();
+            if (val === '') {
+                hint.textContent = 'Student ID starts with ' + prefix + ' for ' + dept.value + '.';
+                hint.classList.remove('hidden');
+                errorEl.classList.add('hidden');
+                return;
+            }
+            if (val.substring(0, 3) !== prefix) {
+                hint.classList.add('hidden');
+                errorEl.textContent = 'Student ID must start with ' + prefix + ' for the ' + dept.value + ' department.';
+                errorEl.classList.remove('hidden');
+            } else {
+                errorEl.classList.add('hidden');
+                hint.textContent = 'Student ID matches the ' + dept.value + ' department.';
+                hint.classList.remove('hidden');
+            }
+        }
+
+        dept.addEventListener('change', check);
+        idInput.addEventListener('input', check);
+    })();
+    </script>
 </body>
 </html>

@@ -37,16 +37,6 @@ foreach ($regFields as $f) {
     }
 }
 
-$deptMap = [
-    'Computer Science & Engineering' => 'CSE',
-    'Electrical & Electronic Engineering' => 'EEE',
-    'Data Science' => 'DS',
-    'English' => 'English',
-    'Business Administration' => 'BBA',
-    'Economics' => 'Economics',
-    'EDS' => 'EDS',
-];
-
 $studentSession = isStudent() ? currentUser() : null;
 $responsesOld = $_POST['responses'] ?? [];
 $fieldDefaults = [];
@@ -59,7 +49,7 @@ foreach ($regFields as $f) {
             'Full Name' => $studentSession['name'] ?? '',
             'Email' => $studentSession['email'] ?? '',
             'Student ID' => $studentSession['university_id'] ?? '',
-            'Department' => $deptMap[$studentSession['department'] ?? ''] ?? '',
+            'Department' => departmentCode($studentSession['department'] ?? ''),
             default => '',
         };
     }

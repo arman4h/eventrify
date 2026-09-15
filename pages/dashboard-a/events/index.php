@@ -66,7 +66,13 @@ $columns = ['Event', 'Club', 'Category', 'Date', 'Registrations', 'Capacity', 'S
 $rows = [];
 
 foreach ($events as $event) {
-    $actions = '<a href="' . e(url('/event?event_id=' . $event['event_id'])) . '" class="btn-ghost btn-sm">View</a>';
+    $actions = '<div class="flex items-center justify-end gap-2">'
+    . '<a href="' . e(url('/event?event_id=' . $event['event_id'])) . '" class="btn-ghost btn-sm">View</a>'
+    . '<form method="POST" action="' . e(url('/admin/events/delete')) . '" onsubmit="return confirm(\'Are you sure you want to delete this event? This cannot be undone.\');">'
+    . '<input type="hidden" name="event_id" value="' . (int) $event['event_id'] . '">'
+    . '<button type="submit" class="btn-ghost btn-sm text-red-600 hover:text-red-700">Delete</button>'
+    . '</form>'
+    . '</div>';
 
     $eventCell = '<div class="min-w-0">
         <p class="font-medium text-gray-900 truncate">' . e($event['title']) . '</p>
@@ -101,8 +107,8 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
 
         <div class="page-header">
             <div>
-                <h1 class="page-title">Events</h1>
-                <p class="page-subtitle">All events created by verified clubs across the platform.</p>
+                <h1 class="page-title">Event Manage</h1>
+                <p class="page-subtitle">All events across the platform. Admins can view or delete any event from any club at any time.</p>
             </div>
         </div>
 

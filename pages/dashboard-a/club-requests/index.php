@@ -43,10 +43,12 @@ if ($statusFilter !== '' && in_array($statusFilter, ['pending', 'approved', 'rej
 }
 
 if ($search !== '') {
-    $conditions[] = "(c.club_name LIKE ? OR c.description LIKE ?)";
+    $conditions[] = "(c.club_name LIKE ? OR c.description LIKE ? OR c.university LIKE ? OR c.club_type LIKE ?)";
     $bindings[]   = "%$search%";
     $bindings[]   = "%$search%";
-    $types       .= 'ss';
+    $bindings[]   = "%$search%";
+    $bindings[]   = "%$search%";
+    $types       .= 'ssss';
 }
 
 $whereSql = count($conditions) > 0 ? 'WHERE ' . implode(' AND ', $conditions) : '';
@@ -67,7 +69,7 @@ if ($page > $totalPages) {
     $offset = ($page - 1) * $limit;
 }
 
-$sql = "SELECT c.club_id, c.club_name, c.description, c.status, c.created_at, c.reviewed_at,
+$sql = "SELECT c.club_id, c.club_name, c.description, c.university, c.club_type, c.status, c.created_at, c.reviewed_at,
         cu.full_name AS owner_name, cu.email AS owner_email
         FROM clubs c
         LEFT JOIN club_users cu ON cu.club_user_id = c.requested_by
@@ -114,11 +116,14 @@ foreach ($requests as $request) {
         $actions .= '<a href="' . e($reviewUrl) . '" class="btn-ghost btn-sm">View</a>';
     }
 
-    $clubCell = '<div class="flex items-center gap-3">
+    $metaParts = array_filter([$request['university'], $request['club_type']]);
+
+$clubCell = '<div class="flex items-center gap-3">
         <span class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-bold text-sm">' . e(strtoupper(substr($request['club_name'], 0, 1))) . '</span>
         <div class="min-w-0">
             <p class="font-medium text-gray-900 truncate">' . e($request['club_name']) . '</p>
-            <p class="text-xs text-gray-500 truncate max-w-xs">' . e($request['description']) . '</p>
+            <p class="text-xs text-gray-500 truncate max-w-xs">' . e(implode(' · ', $metaParts)) . '</p>
+            <p class="text-[11px] text-gray-400 truncate max-w-xs">' . e(substr((string) $request['description'], 0, 60)) . '</p>
         </div>
     </div>';
 

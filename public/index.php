@@ -39,6 +39,7 @@ $routes = [
     'admin/club-requests/review'     => '/pages/dashboard-a/club-requests/review.php',
     'admin/clubs'                    => '/pages/dashboard-a/clubs/index.php',
     'admin/events'                   => '/pages/dashboard-a/events/index.php',
+    'admin/events/delete'            => '/pages/dashboard-a/events/delete.php',
     'admin/users'                    => '/pages/dashboard-a/users/index.php',
     'admin/room-requests'            => '/pages/dashboard-a/room-requests/index.php',
     'admin/reports'                  => '/pages/dashboard-a/reports/index.php',

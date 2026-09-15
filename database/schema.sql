@@ -39,14 +39,21 @@ CREATE TABLE system_admins (
 -- 3. CLUBS
 -- ============================================================
 CREATE TABLE clubs (
-    club_id       INT AUTO_INCREMENT PRIMARY KEY,
-    club_name     VARCHAR(100) NOT NULL UNIQUE,
-    description   TEXT,
-    logo          VARCHAR(255),
-    status        ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
-    reviewed_by   INT,                             -- system_admins.admin_id who approved/rejected
-    reviewed_at   TIMESTAMP NULL,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    club_id          INT AUTO_INCREMENT PRIMARY KEY,
+    club_name        VARCHAR(100) NOT NULL UNIQUE,
+    university       VARCHAR(150),
+    club_type        VARCHAR(50),
+    established_year SMALLINT,
+    description      TEXT,
+    logo             LONGTEXT,                     -- base64-encoded club logo image
+    official_email   VARCHAR(100),
+    website          VARCHAR(255),
+    facebook         VARCHAR(255),
+    social_links     VARCHAR(255),
+    status           ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    reviewed_by      INT,                          -- system_admins.admin_id who approved/rejected
+    reviewed_at      TIMESTAMP NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_clubs_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES system_admins(admin_id)
 );
 
@@ -58,16 +65,19 @@ CREATE TABLE clubs (
 --    - executive: restricted access, governed by executive_permissions
 -- ============================================================
 CREATE TABLE club_users (
-    club_user_id   INT AUTO_INCREMENT PRIMARY KEY,
-    club_id        INT NOT NULL,
-    full_name      VARCHAR(100) NOT NULL,
-    email          VARCHAR(100) NOT NULL UNIQUE,
-    password_hash  VARCHAR(255) NOT NULL,
-    phone          VARCHAR(20),
-    role           ENUM('owner', 'admin', 'executive') NOT NULL DEFAULT 'executive',
-    status         ENUM('active', 'inactive', 'removed') NOT NULL DEFAULT 'active',
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    club_user_id     INT AUTO_INCREMENT PRIMARY KEY,
+    club_id          INT NOT NULL,
+    full_name        VARCHAR(100) NOT NULL,
+    email            VARCHAR(100) NOT NULL UNIQUE,
+    password_hash    VARCHAR(255) NOT NULL,
+    phone            VARCHAR(20),
+    student_id       VARCHAR(20),
+    position         VARCHAR(50),
+    university_email VARCHAR(100),
+    role             ENUM('owner', 'admin', 'executive') NOT NULL DEFAULT 'executive',
+    status           ENUM('active', 'inactive', 'removed') NOT NULL DEFAULT 'active',
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_clubusers_club FOREIGN KEY (club_id) REFERENCES clubs(club_id) ON DELETE CASCADE
 );
 
@@ -98,7 +108,7 @@ CREATE TABLE executive_permissions (
 );
 
 -- ============================================================
--- 7. EVENTS
+-- 8. EVENTS
 -- ============================================================
 CREATE TABLE events (
     event_id               INT AUTO_INCREMENT PRIMARY KEY,

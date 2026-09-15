@@ -12,21 +12,22 @@ $errors = [];
 $application = null;
 
 if (isPost()) {
-    $clubName      = post('club_name');
+    $clubName       = post('club_name');
     $universityName = post('university');
-    $clubType      = post('club_type');
-    $established   = post('established_year');
-    $description   = post('description');
-    $clubEmail     = post('official_email');
-    $website       = post('website');
-    $facebook      = post('facebook');
-    $social        = post('social_links');
-    $applicantName = post('applicant_name');
-    $studentId     = post('student_id');
-    $position      = post('position');
+    $clubType       = post('club_type');
+    $established    = post('established_year') !== '' ? (int) post('established_year') : null;
+    $description    = post('description');
+    $clubEmail      = post('official_email');
+    $website        = post('website');
+    $facebook       = post('facebook');
+    $social         = post('social_links');
+    $applicantName  = post('applicant_name');
+    $studentId      = post('student_id');
+    $position       = post('position');
     $applicantEmail = post('applicant_email');
-    $phone         = post('phone');
-    $declaration   = isset($_POST['declaration']);
+    $phone          = post('phone');
+    $declaration    = isset($_POST['declaration']);
+    $logoData       = '';
 
     if (
         $clubName === '' || $universityName === '' || $clubType === '' || $description === '' ||
@@ -44,13 +45,40 @@ if (isPost()) {
         $errors[] = 'Please enter a valid university email address.';
     }
 
+    if ($established !== null && ($established < 1990 || $established > (int) date('Y'))) {
+        $errors[] = 'Please enter a valid established year.';
+    }
+
+    if ($website !== '' && !filter_var($website, FILTER_VALIDATE_URL)) {
+        $errors[] = 'Please enter a valid website URL.';
+    }
+
+    if ($facebook !== '' && !filter_var($facebook, FILTER_VALIDATE_URL)) {
+        $errors[] = 'Please enter a valid Facebook page URL.';
+    }
+
     if (!$declaration) {
         $errors[] = 'You must confirm that you are authorized to represent this club.';
     }
 
+    if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath      = $_FILES['logo']['tmp_name'];
+        $mime         = mime_content_type($tmpPath);
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $size         = (int) $_FILES['logo']['size'];
+
+        if (!in_array($mime, $allowedMimes, true)) {
+            $errors[] = 'Logo must be a JPG, PNG, WebP, or GIF image.';
+        } elseif ($size > 2 * 1024 * 1024) {
+            $errors[] = 'Logo image must be 2MB or smaller.';
+        } else {
+            $logoData = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($tmpPath));
+        }
+    }
+
     if (empty($errors)) {
-        $checkEmail = $db->prepare("SELECT club_user_id FROM club_users WHERE email = ? LIMIT 1");
-        $checkEmail->bind_param('s', $clubEmail);
+        $checkEmail = $db->prepare("SELECT club_user_id FROM club_users WHERE email IN (?, ?) LIMIT 1");
+        $checkEmail->bind_param('ss', $clubEmail, $applicantEmail);
         $checkEmail->execute();
         $checkEmail->store_result();
 
@@ -72,16 +100,22 @@ if (isPost()) {
 
             $db->begin_transaction();
             try {
-                $clubStmt = $db->prepare("INSERT INTO clubs (club_name, description, status) VALUES (?, ?, 'pending')");
-                $clubStmt->bind_param('ss', $clubName, $description);
+                $clubStmt = $db->prepare("
+                    INSERT INTO clubs
+                        (club_name, description, logo, university, club_type, established_year,
+                         official_email, website, facebook, social_links, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                ");
+                $clubStmt->bind_param('ssssssssss', $clubName, $description, $logoData, $universityName, $clubType, $established, $clubEmail, $website, $facebook, $social);
                 $clubStmt->execute();
                 $clubId = $clubStmt->insert_id;
 
                 $userStmt = $db->prepare("
-                    INSERT INTO club_users (club_id, full_name, email, password_hash, phone, role, status)
-                    VALUES (?, ?, ?, ?, ?, 'owner', 'active')
+                    INSERT INTO club_users
+                        (club_id, full_name, email, password_hash, phone, student_id, position, university_email, role, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'owner', 'active')
                 ");
-                $userStmt->bind_param('issss', $clubId, $applicantName, $clubEmail, $passwordHash, $phone);
+                $userStmt->bind_param('isssssss', $clubId, $applicantName, $clubEmail, $passwordHash, $phone, $studentId, $position, $applicantEmail);
                 $userStmt->execute();
                 $clubUserId = $userStmt->insert_id;
 
@@ -251,17 +285,6 @@ $pageTitle = 'Request Club Access';
                                 <label for="phone" class="label label-required">Phone</label>
                                 <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>" required>
                             </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h2 class="text-base font-semibold text-gray-900">Verification Documents</h2>
-                        <div class="separator mt-3 mb-5"></div>
-
-                        <div class="form-group">
-                            <label for="documents" class="label">Organizational documents (constitution, advisor letter, etc.)</label>
-                            <input type="file" id="documents" name="documents[]" class="input" multiple>
-                            <p class="form-hint">You can attach multiple files.</p>
                         </div>
                     </div>
 
