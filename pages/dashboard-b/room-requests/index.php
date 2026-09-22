@@ -3,27 +3,37 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('room_requests');
 
 $pageTitle = 'Room Requests';
 $activePage = 'room-requests';
 
 $clubId = (int) currentUser()['club_id'];
 
+$slots = roomTimeSlots();
+
 if (isPost()) {
     $eventId = (int) post('event_id');
     $requestedDate = post('requested_date');
-    $startTime = post('start_time');
-    $endTime = post('end_time');
+    $timeSlot = post('time_slot');
     $expectedParticipants = (int) post('expected_participants');
-    $preferredBuilding = post('preferred_building');
     $preferredRoom = post('preferred_room');
     $reason = post('reason');
 
-    if ($requestedDate !== '' && $startTime !== '' && $endTime !== '') {
-        $ins = $db->prepare("INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_time, expected_participants, preferred_building, preferred_room, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+    $startTime = '';
+    $endTime = '';
+    foreach ($slots as $slot) {
+        if ($timeSlot === $slot['start'] . '|' . $slot['end']) {
+            $startTime = $slot['start'] . ':00';
+            $endTime = $slot['end'] . ':00';
+            break;
+        }
+    }
+
+    if ($requestedDate !== '' && $startTime !== '') {
+        $ins = $db->prepare("INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_time, expected_participants, preferred_room, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
         $evId = $eventId > 0 ? $eventId : null;
-        $ins->bind_param('iisssiiss', $clubId, $evId, $requestedDate, $startTime, $endTime, $expectedParticipants, $preferredBuilding, $preferredRoom, $reason);
+        $ins->bind_param('iisssiss', $clubId, $evId, $requestedDate, $startTime, $endTime, $expectedParticipants, $preferredRoom, $reason);
         if ($ins->execute()) {
             $_SESSION['flash']['success'] = 'Room request submitted.';
             redirect('/club/room-requests');
@@ -31,7 +41,7 @@ if (isPost()) {
             $_SESSION['flash']['error'] = 'Failed to submit request.';
         }
     } else {
-        $_SESSION['flash']['error'] = 'Date, start time, and end time are required.';
+        $_SESSION['flash']['error'] = 'Date and time slot are required.';
     }
 }
 
@@ -52,8 +62,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
     <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <?php
-        $alertType = flash('success') ? 'success' : 'error';
-        $alertMessage = flash('success') ?: flash('error');
+        $flashSuccess = flash('success');
+        $flashError = flash('error');
+        $alertMessage = $flashSuccess ?: $flashError;
+        $alertType = $flashSuccess ? 'success' : ($flashError ? 'error' : 'info');
         if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
         ?>
 
@@ -82,20 +94,17 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <input type="date" name="requested_date" class="input" required>
                     </div>
                     <div class="form-group">
-                        <label class="label-required">Start Time</label>
-                        <input type="time" name="start_time" class="input" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="label-required">End Time</label>
-                        <input type="time" name="end_time" class="input" required>
+                        <label class="label-required">Time Slot</label>
+                        <select name="time_slot" class="select" required>
+                            <option value="">Select time slot...</option>
+                            <?php foreach ($slots as $slot): ?>
+                                <option value="<?= e($slot['start'] . '|' . $slot['end']) ?>"><?= e($slot['label']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label class="label">Expected Participants</label>
                         <input type="number" name="expected_participants" class="input" min="1" value="<?= e(post('expected_participants')) ?>">
-                    </div>
-                    <div class="form-group">
-                        <label class="label">Preferred Building</label>
-                        <input type="text" name="preferred_building" class="input" value="<?= e(post('preferred_building')) ?>" placeholder="e.g. Building A">
                     </div>
                     <div class="form-group">
                         <label class="label">Preferred Room</label>
@@ -140,10 +149,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                             <tr>
                                 <td class="font-medium text-gray-900"><?= e($req['event_title'] ?: '—') ?></td>
                                 <td class="whitespace-nowrap text-sm text-gray-600"><?= formatDate($req['requested_date']) ?></td>
-                                <td class="text-sm text-gray-600"><?= e(substr($req['start_time'], 0, 5)) ?> — <?= e(substr($req['end_time'], 0, 5)) ?></td>
+                                <td class="text-sm text-gray-600"><?= e(roomSlotLabel($req['start_time'], $req['end_time'])) ?></td>
                                 <td class="text-sm text-gray-600"><?= (int) $req['expected_participants'] ?></td>
                                 <td class="text-sm text-gray-600">
-                                    <?= e(($req['preferred_building'] ?: '') . ($req['preferred_room'] ? ', ' . $req['preferred_room'] : '')) ?: '—' ?>
+                                    <?= e($req['preferred_room'] ?: '') ?: '—' ?>
                                 </td>
                                 <td>
                                     <?php

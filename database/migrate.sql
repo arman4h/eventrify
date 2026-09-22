@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS room_requests (
     start_time        TIME NOT NULL,
     end_time          TIME NOT NULL,
     expected_participants INT NOT NULL DEFAULT 0,
-    preferred_building VARCHAR(100),
     preferred_room    VARCHAR(100),
     reason            TEXT,
     status            ENUM('pending', 'approved', 'declined') NOT NULL DEFAULT 'pending',
@@ -132,11 +131,11 @@ WHERE NOT EXISTS (
 -- ────────────────────────────────────────────────────────────
 -- Demo room requests
 -- ────────────────────────────────────────────────────────────
-INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_time, expected_participants, preferred_building, preferred_room, reason, status, reviewed_at) VALUES
-(1, 2, '2026-11-14', '09:00:00', '18:00:00', 200, 'Academic Building 3', 'Ground Floor Hall', 'Large hall needed for the competition arena and seating for teams.', 'pending', NULL),
-(3, 6, '2026-10-20', '15:00:00', '17:30:00', 150, 'Admin Building', 'Auditorium', 'Auditorium fits the expected seminar turnout.', 'approved', NOW() - INTERVAL 2 DAY),
-(1, 7, '2026-12-01', '11:00:00', '16:00:00', 300, 'Central Plaza', 'Open Ground', 'Outdoor showcase - need permission to use the plaza.', 'pending', NULL),
-(2, 4, '2026-10-16', '09:00:00', '17:00:00', 100, 'Academic Building 1', 'Room 501', 'Two-day bootcamp needs a projector and AC room.', 'declined', NOW() - INTERVAL 1 DAY);
+INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_time, expected_participants, preferred_room, reason, status, reviewed_at) VALUES
+(1, 2, '2026-11-14', '08:30:00', '09:50:00', 200, 'Ground Floor Hall', 'Large hall needed for the competition arena and seating for teams.', 'pending', NULL),
+(3, 6, '2026-10-20', '09:51:00', '11:10:00', 150, 'Auditorium', 'Auditorium fits the expected seminar turnout.', 'approved', NOW() - INTERVAL 2 DAY),
+(1, 7, '2026-12-01', '12:31:00', '13:40:00', 300, 'Open Ground', 'Outdoor showcase - need permission to use the plaza.', 'pending', NULL),
+(2, 4, '2026-10-16', '15:11:00', '16:30:00', 100, 'Room 501', 'Two-day bootcamp needs a projector and AC room.', 'declined', NOW() - INTERVAL 1 DAY);
 
 -- ────────────────────────────────────────────────────────────
 -- Demo reports
@@ -166,7 +165,20 @@ ALTER TABLE clubs MODIFY COLUMN logo LONGTEXT NULL;
 ALTER TABLE club_users
     ADD COLUMN IF NOT EXISTS student_id       VARCHAR(20) AFTER phone,
     ADD COLUMN IF NOT EXISTS position         VARCHAR(50) AFTER student_id,
-    ADD COLUMN IF NOT EXISTS university_email VARCHAR(100) AFTER position;
+    ADD COLUMN IF NOT EXISTS university_email VARCHAR(100) AFTER position,
+    ADD COLUMN IF NOT EXISTS access_scope     ENUM('all', 'limited') NOT NULL DEFAULT 'all' AFTER role;
+
+INSERT INTO club_permission_pages (page_key, page_name)
+SELECT v.page_key, v.page_name FROM (
+    SELECT 'club_profile'  page_key, 'Club Profile'          page_name
+    UNION ALL SELECT 'members',       'Member Management'
+    UNION ALL SELECT 'events',        'Event Management'
+    UNION ALL SELECT 'attendance',    'Attendance / Check-in'
+    UNION ALL SELECT 'registrations', 'Registrations & Waitlist'
+    UNION ALL SELECT 'reports',       'Reports'
+    UNION ALL SELECT 'room_requests', 'Room Requests'
+) v
+WHERE NOT EXISTS (SELECT 1 FROM club_permission_pages p WHERE p.page_key = v.page_key);
 
 -- Backfill demo data for the already-seeded demo clubs/users
 UPDATE clubs SET

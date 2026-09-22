@@ -86,6 +86,8 @@ if (isPost()) {
         );
 
         if ($stmt->execute()) {
+            $newStudentId = (int) $db->insert_id;
+            linkGuestRegistrations($newStudentId, $email);
             $registeredEmail = $email;
             setOld([]);
         } else {

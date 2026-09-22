@@ -59,6 +59,8 @@ function icon(string $name, string $class = 'w-5 h-5', int $stroke = 2): string
         'laptop'         => '<path stroke-linecap="round" stroke-linejoin="round" d="M10 6h4m0 0l2 2m-2-2L12 4m0 0h-2m2 0l2 2M4 6h2m2 0L6 4m-2 0v2m14 0h2m-2 0l-2-2m0 0V3m0 2l2 2m-4 11h9M4 17h9m-6 3l1 2m4-2l-1 2m-2 0h4"/>',
         'briefcase'      => '<path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>',
         'swap'           => '<path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>',
+        'pause'          => '<path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+        'play'           => '<path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
     ];
 
     $path = $paths[$name] ?? $paths['info'];

@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('attendance');
 
 $pageTitle = 'Walk-in Registration';
 $activePage = 'attendance';
@@ -31,10 +31,20 @@ if (isPost()) {
     $department = post('department');
 
     if ($name !== '') {
+        $sid = null;
+        if ($studentId !== '') {
+            $stu = $db->prepare("SELECT student_id FROM students WHERE university_id = ? LIMIT 1");
+            $stu->bind_param('s', $studentId);
+            $stu->execute();
+            $stuRow = $stu->get_result()->fetch_assoc();
+            if ($stuRow) {
+                $sid = (int) $stuRow['student_id'];
+            }
+        }
         $ins = $db->prepare("INSERT INTO event_registrations (event_id, student_id, guest_name, guest_student_id, is_walkin, status, checked_in_at, checked_in_by, registered_at) VALUES (?, ?, ?, ?, 1, 'attended', NOW(), ?, NOW())");
         $userId = currentUserId();
-        $sid = $studentId !== '' ? $studentId : null;
-        $ins->bind_param('iissi', $eventId, $sid, $name, $studentId, $userId);
+        $gid = $studentId !== '' ? $studentId : null;
+        $ins->bind_param('iissi', $eventId, $sid, $name, $gid, $userId);
         if ($ins->execute()) {
             $success = true;
             $guestName = $name;
@@ -54,8 +64,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
     <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <?php
-        $alertType = flash('success') ? 'success' : 'error';
-        $alertMessage = flash('success') ?: flash('error');
+        $flashSuccess = flash('success');
+        $flashError = flash('error');
+        $alertMessage = $flashSuccess ?: $flashError;
+        $alertType = $flashSuccess ? 'success' : ($flashError ? 'error' : 'info');
         if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
         ?>
 

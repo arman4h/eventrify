@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('events');
 
 $pageTitle = 'Events';
 $activePage = 'events';
@@ -53,8 +53,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
     <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <?php
-        $alertType = flash('success') ? 'success' : 'error';
-        $alertMessage = flash('success') ?: flash('error');
+        $flashSuccess = flash('success');
+        $flashError = flash('error');
+        $alertMessage = $flashSuccess ?: $flashError;
+        $alertType = $flashSuccess ? 'success' : ($flashError ? 'error' : 'info');
         if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
         ?>
 
@@ -109,7 +111,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                             <tr>
                                 <td>
                                     <div class="font-medium text-gray-900"><?= e($event['title']) ?></div>
-                                    <div class="text-xs text-gray-500"><?= e(mb_strimwidth($event['description'] ?? '', 0, 60, '…')) ?></div>
+                                    <div class="text-xs text-gray-500"><?= e(truncate($event['description'], 60)) ?></div>
                                 </td>
                                 <td class="whitespace-nowrap text-sm text-gray-700"><?= formatDate($event['start_time']) ?></td>
                                 <td class="text-sm text-gray-700"><?= e($event['venue']) ?></td>

@@ -23,11 +23,13 @@
             </button>
 
             <div class="dropdown-menu hidden">
+                <?php if (clubCanAccess('club_profile')): ?>
                 <a href="<?= url('/club/settings') ?>" class="dropdown-item">
                     <?= icon('settings', 'w-4 h-4') ?>
                     Club Settings
                 </a>
                 <div class="dropdown-divider"></div>
+                <?php endif; ?>
                 <a href="<?= url('/logout') ?>" class="dropdown-item">
                     <?= icon('logout', 'w-4 h-4') ?>
                     Logout

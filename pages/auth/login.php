@@ -26,6 +26,7 @@ if (isPost()) {
             if (!$student['is_active']) {
                 $error = 'Your account is deactivated. Please contact support.';
             } else {
+                linkGuestRegistrations((int) $student['student_id'], $student['email']);
                 loginStudent($student);
                 redirect('/student');
             }

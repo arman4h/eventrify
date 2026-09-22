@@ -74,11 +74,13 @@ function loginClubUser(array $clubUser): void
     $_SESSION['user_id']   = (int) $clubUser['club_user_id'];
     $_SESSION['user_type'] = 'club_user';
     $_SESSION['user'] = [
-        'id'       => (int) $clubUser['club_user_id'],
-        'club_id'  => (int) $clubUser['club_id'],
-        'name'     => $clubUser['full_name'],
-        'email'    => $clubUser['email'],
-        'role'     => $clubUser['role'],
+        'id'          => (int) $clubUser['club_user_id'],
+        'club_id'     => (int) $clubUser['club_id'],
+        'name'        => $clubUser['full_name'],
+        'email'       => $clubUser['email'],
+        'role'        => $clubUser['role'],
+        'access_scope' => $clubUser['access_scope'] ?? 'all',
+        'club_status' => $clubUser['club_status'] ?? 'pending',
     ];
 }
 

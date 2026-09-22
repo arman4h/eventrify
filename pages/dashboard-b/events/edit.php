@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('events');
 
 $pageTitle = 'Edit Event';
 $activePage = 'events';
@@ -264,8 +264,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="label">Options <span class="form-hint">(comma-separated for dropdown/radio)</span></label>
+                        <div class="form-group question-options">
+                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/checkbox)</span></label>
                             <input type="text" name="questions[options][]" class="input" value="<?= e($f['field_options']) ?>" placeholder="e.g. S, M, L, XL">
                         </div>
                         <label class="flex items-center gap-2">
@@ -293,8 +293,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="label">Options <span class="form-hint">(comma-separated for dropdown/radio)</span></label>
+                        <div class="form-group question-options">
+                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/checkbox)</span></label>
                             <input type="text" name="questions[options][]" class="input" placeholder="e.g. S, M, L, XL">
                         </div>
                         <label class="flex items-center gap-2">
@@ -332,15 +332,32 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 </div>
 
 <script>
+function toggleQuestionOptions(row) {
+    var sel = row.querySelector('select[name="questions[type][]"]');
+    var opts = row.querySelector('.question-options');
+    if (!sel || !opts) return;
+    var show = sel.value === 'dropdown' || sel.value === 'checkbox';
+    opts.classList.toggle('hidden', !show);
+    var input = opts.querySelector('input');
+    if (input) input.disabled = !show;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    var container = document.getElementById('questionsContainer');
+    container.addEventListener('change', function(e) {
+        if (e.target.matches('select[name="questions[type][]"]')) {
+            toggleQuestionOptions(e.target.closest('.question-row'));
+        }
+    });
     document.getElementById('addQuestion').addEventListener('click', function() {
-        var container = document.getElementById('questionsContainer');
         var first = container.querySelector('.question-row');
         var clone = first.cloneNode(true);
         clone.querySelectorAll('input, select').forEach(function(el) {
             if (el.type === 'checkbox') { el.checked = false; } else { el.value = ''; }
         });
         container.appendChild(clone);
+        toggleQuestionOptions(clone);
     });
+    container.querySelectorAll('.question-row').forEach(toggleQuestionOptions);
 });
 </script>

@@ -75,6 +75,7 @@ CREATE TABLE club_users (
     position         VARCHAR(50),
     university_email VARCHAR(100),
     role             ENUM('owner', 'admin', 'executive') NOT NULL DEFAULT 'executive',
+    access_scope     ENUM('all', 'limited') NOT NULL DEFAULT 'all',
     status           ENUM('active', 'inactive', 'removed') NOT NULL DEFAULT 'active',
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -207,7 +208,8 @@ INSERT INTO club_permission_pages (page_key, page_name) VALUES
     ('events',         'Event Management'),
     ('attendance',     'Attendance / Check-in'),
     ('registrations',  'Registrations & Waitlist'),
-    ('reports',        'Reports');
+    ('reports',        'Reports'),
+    ('room_requests',  'Room Requests');
 
 -- ============================================================
 -- SEED DATA: a system administrator account (change password before use)

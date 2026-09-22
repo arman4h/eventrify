@@ -92,16 +92,19 @@ if (isPost() && post('action') === 'register_event') {
     $guestEmail = '';
     $guestStudentId = '';
     $guestDepartment = '';
+    $guestPhone = '';
 
     foreach ($regFields as $f) {
         $val = isset($responses[$f['field_id']]) ? trim((string) $responses[$f['field_id']]) : '';
         if ($f['is_required'] && $val === '') {
             $errors[] = $f['field_label'] . ' is required.';
         }
-        if ($f['field_label'] === 'Full Name') $guestName = $val;
-        if ($f['field_label'] === 'Email') $guestEmail = $val;
-        if ($f['field_label'] === 'Student ID') $guestStudentId = $val;
-        if ($f['field_label'] === 'Department') $guestDepartment = $val;
+        $label = strtolower(trim($f['field_label']));
+        if ($label === 'full name') $guestName = $val;
+        if ($label === 'email') $guestEmail = $val;
+        if ($label === 'student id') $guestStudentId = $val;
+        if ($label === 'department') $guestDepartment = $val;
+        if (strpos($label, 'phone') === 0) $guestPhone = $val;
     }
 
     if ($guestEmail !== '' && !filter_var($guestEmail, FILTER_VALIDATE_EMAIL)) {
@@ -153,6 +156,14 @@ if (isPost() && post('action') === 'register_event') {
             if ($stmt->get_result()->fetch_assoc()) {
                 $errors[] = 'This Student ID is already registered for this event.';
             }
+        }
+
+        if ($guestEmail !== '' && eventRegistrationValueTaken($eventId, 'email', $guestEmail)) {
+            $errors[] = 'This email is already registered for this event.';
+        }
+
+        if ($guestPhone !== '' && eventRegistrationValueTaken($eventId, 'phone', $guestPhone)) {
+            $errors[] = 'This phone number is already registered for this event.';
         }
     }
 

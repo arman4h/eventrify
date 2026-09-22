@@ -82,7 +82,7 @@ if ($page > $totalPages) {
 }
 
 $sql = "SELECT r.request_id, r.requested_date, r.start_time, r.end_time, r.expected_participants,
-        r.preferred_building, r.preferred_room, r.reason, r.review_notes, r.status, r.reviewed_at,
+        r.preferred_room, r.reason, r.review_notes, r.status, r.reviewed_at,
         c.club_name, e.title AS event_title
         FROM room_requests r
         LEFT JOIN clubs c ON c.club_id = r.club_id
@@ -133,7 +133,6 @@ foreach ($requests as $request) {
 
     $roomCell = '<div class="min-w-0">
         <p class="font-medium text-gray-900 truncate">' . e($request['preferred_room'] ?? '—') . '</p>
-        <p class="text-xs text-gray-500">' . e($request['preferred_building'] ?? '—') . '</p>
     </div>';
 
     $statusCell = '';
@@ -147,7 +146,7 @@ foreach ($requests as $request) {
         '<span class="text-sm font-medium text-gray-900">' . e($request['club_name'] ?? '—') . '</span>',
         '<span class="text-sm text-gray-600">' . e($request['event_title'] ?? '—') . '</span>',
         formatDate($request['requested_date'], 'M d, Y'),
-        '<span class="text-sm text-gray-600 whitespace-nowrap">' . formatDate($request['start_time'], 'g:i A') . ' – ' . formatDate($request['end_time'], 'g:i A') . '</span>',
+        '<span class="text-sm text-gray-600 whitespace-nowrap">' . e(roomSlotLabel((string) $request['start_time'], (string) $request['end_time'])) . '</span>',
         '<span class="text-sm text-gray-600">' . (int) $request['expected_participants'] . '</span>',
         $roomCell,
         $statusCell,
@@ -205,7 +204,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                 </div>
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Time</p>
-                    <p class="text-sm font-medium text-gray-900"><?= formatDate($reviewRequest['start_time'], 'g:i A') ?> – <?= formatDate($reviewRequest['end_time'], 'g:i A') ?></p>
+                    <p class="text-sm font-medium text-gray-900"><?= e(roomSlotLabel((string) $reviewRequest['start_time'], (string) $reviewRequest['end_time'])) ?></p>
                 </div>
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Participants</p>
@@ -213,7 +212,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                 </div>
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Requested Room</p>
-                    <p class="text-sm font-medium text-gray-900"><?= e($reviewRequest['preferred_room'] ?? '—') ?>, <?= e($reviewRequest['preferred_building'] ?? '—') ?></p>
+                    <p class="text-sm font-medium text-gray-900"><?= e($reviewRequest['preferred_room'] ?? '—') ?></p>
                 </div>
             </div>
 

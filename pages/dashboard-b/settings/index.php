@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('club_profile');
 
 $pageTitle = 'Settings';
 $activePage = 'settings';
@@ -27,8 +27,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
     <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <?php
-        $alertType = flash('success') ? 'success' : 'error';
-        $alertMessage = flash('success') ?: flash('error');
+        $flashSuccess = flash('success');
+        $flashError = flash('error');
+        $alertMessage = $flashSuccess ?: $flashError;
+        $alertType = $flashSuccess ? 'success' : ($flashError ? 'error' : 'info');
         if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
         ?>
 

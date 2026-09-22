@@ -9,7 +9,6 @@ if (isLoggedIn()) {
 require_once BASE_PATH . '/app/config/database.php';
 
 $errors = [];
-$application = null;
 
 if (isPost()) {
     $clubName       = post('club_name');
@@ -26,13 +25,15 @@ if (isPost()) {
     $position       = post('position');
     $applicantEmail = post('applicant_email');
     $phone          = post('phone');
+    $password       = post('password');
+    $passwordConfirm = post('password_confirm');
     $declaration    = isset($_POST['declaration']);
     $logoData       = '';
 
     if (
         $clubName === '' || $universityName === '' || $clubType === '' || $description === '' ||
         $clubEmail === '' || $applicantName === '' || $studentId === '' || $position === '' ||
-        $applicantEmail === '' || $phone === ''
+        $applicantEmail === '' || $phone === '' || $password === '' || $passwordConfirm === ''
     ) {
         $errors[] = 'Please fill in all required fields.';
     }
@@ -43,6 +44,14 @@ if (isPost()) {
 
     if (!filter_var($applicantEmail, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please enter a valid university email address.';
+    }
+
+    if (strlen($password) < 8) {
+        $errors[] = 'Password must be at least 8 characters long.';
+    }
+
+    if ($password !== $passwordConfirm) {
+        $errors[] = 'Passwords do not match.';
     }
 
     if ($established !== null && ($established < 1990 || $established > (int) date('Y'))) {
@@ -96,7 +105,7 @@ if (isPost()) {
         }
 
         if (empty($errors)) {
-            $passwordHash = password_hash(bin2hex(random_bytes(8)), PASSWORD_DEFAULT);
+            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
             $db->begin_transaction();
             try {
@@ -125,8 +134,18 @@ if (isPost()) {
 
                 $db->commit();
 
-                $application = sprintf('EVENTRIFY-%05d', $clubId);
+                loginClubUser([
+                    'club_user_id' => $clubUserId,
+                    'club_id'      => $clubId,
+                    'full_name'    => $applicantName,
+                    'email'        => $clubEmail,
+                    'role'         => 'owner',
+                    'club_status'  => 'pending',
+                ]);
+                $_SESSION['user']['application_id'] = sprintf('EVENTRIFY-%05d', $clubId);
                 setOld([]);
+                flash('success', 'Your club registration has been submitted and is pending review.');
+                redirect('/club');
             } catch (Exception $e) {
                 $db->rollback();
                 $errors[] = 'Application failed. Please try again.';
@@ -156,21 +175,9 @@ $pageTitle = 'Request Club Access';
 
     <div class="w-full max-w-2xl">
         <div class="card p-6 sm:p-8">
-            <?php if ($application !== null): ?>
-                <div class="flex flex-col items-center text-center py-4">
-                    <span class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 mb-4"><?= icon('check-circle', 'w-7 h-7') ?></span>
-                    <h1 class="text-xl font-bold text-gray-900">Application Submitted</h1>
-                    <div class="flex items-center gap-3 mt-4">
-                        <span class="badge badge-warning">Pending Review</span>
-                        <span class="text-sm text-gray-500">Your application ID: <span class="font-semibold text-gray-900"><?= e($application) ?></span></span>
-                    </div>
-                    <p class="text-sm text-gray-500 mt-4 max-w-md">Our team will review your request. You'll receive access to the Club Dashboard once approved.</p>
-                    <a href="<?= url('/') ?>" class="btn-secondary btn-lg mt-6">Back to Home</a>
-                </div>
-            <?php else: ?>
-                <div class="mb-6">
+            <div class="mb-6">
                     <h1 class="text-xl font-bold text-gray-900">Request Club Access</h1>
-                    <p class="text-sm text-gray-500 mt-1">Representing a university club? Submit your club information for verification. Once approved, you'll receive access to the Eventrify Club Dashboard.</p>
+                    <p class="text-sm text-gray-500 mt-1">Representing a university club? Submit your club information for verification. You'll be able to log in with your own password right away to track your approval status, and the full Club Dashboard unlocks once approved.</p>
                 </div>
 
                 <?php foreach ($errors as $error): ?>
@@ -285,6 +292,17 @@ $pageTitle = 'Request Club Access';
                                 <label for="phone" class="label label-required">Phone</label>
                                 <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>" required>
                             </div>
+
+                            <div class="form-group">
+                                <label for="password" class="label label-required">Set Password</label>
+                                <input type="password" id="password" name="password" class="input" placeholder="At least 8 characters" required autocomplete="new-password">
+                                <p class="form-hint">You'll log in to the Club Dashboard with the official club email and this password.</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="password_confirm" class="label label-required">Confirm Password</label>
+                                <input type="password" id="password_confirm" name="password_confirm" class="input" placeholder="Re-enter your password" required autocomplete="new-password">
+                            </div>
                         </div>
                     </div>
 
@@ -298,7 +316,6 @@ $pageTitle = 'Request Club Access';
                         <a href="<?= url('/login') ?>" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to student login</a>
                     </div>
                 </form>
-            <?php endif; ?>
         </div>
     </div>
 

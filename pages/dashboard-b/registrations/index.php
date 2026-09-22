@@ -3,7 +3,7 @@ require_once BASE_PATH . '/app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 require_once BASE_PATH . '/app/config/database.php';
 
-requireClubUser();
+requireClubAccess('registrations');
 
 $pageTitle = 'Registrations';
 $activePage = 'registrations';
@@ -14,6 +14,40 @@ $search = get('q');
 $page = max(1, (int) get('page', 1));
 $perPage = 10;
 $offset = ($page - 1) * $perPage;
+
+if (isPost()) {
+    $action = post('action');
+    $regId = (int) post('registration_id');
+
+    if ($regId > 0) {
+        $ownerStmt = $db->prepare("SELECT er.*, e.title AS event_title FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE er.registration_id = ? AND e.club_id = ?");
+        $ownerStmt->bind_param('ii', $regId, $clubId);
+        $ownerStmt->execute();
+        $owner = $ownerStmt->get_result()->fetch_assoc();
+
+        if ($owner) {
+            if ($action === 'checkin' && $owner['status'] !== 'attended') {
+                $upd = $db->prepare("UPDATE event_registrations SET status = 'attended', checked_in_at = NOW(), check_in_method = 'manual', checked_in_by = ? WHERE registration_id = ?");
+                $upd->bind_param('ii', currentUserId(), $regId);
+                $upd->execute();
+                $_SESSION['flash']['success'] = ($owner['guest_name'] ?: 'Participant') . ' checked in.';
+            } elseif ($action === 'checkin' && $owner['status'] === 'attended') {
+                $_SESSION['flash']['info'] = 'Already checked in.';
+            } elseif ($action === 'delete') {
+                $del = $db->prepare("DELETE FROM event_registrations WHERE registration_id = ? AND event_id IN (SELECT event_id FROM events WHERE club_id = ?)");
+                $del->bind_param('ii', $regId, $clubId);
+                $del->execute();
+                $_SESSION['flash']['success'] = 'Registration deleted.';
+            }
+        }
+    }
+
+    $qs = [];
+    if ($filterEventId > 0) $qs['event_id'] = $filterEventId;
+    if ($search !== '') $qs['q'] = $search;
+    if ($page > 1) $qs['page'] = $page;
+    redirect('/club/registrations' . (!empty($qs) ? '?' . http_build_query($qs) : ''));
+}
 
 $baseQuery = "FROM event_registrations er JOIN events e ON e.event_id = er.event_id WHERE e.club_id = ?";
 $countQuery = "SELECT COUNT(*) as c $baseQuery";
@@ -71,8 +105,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     <?php require BASE_PATH . '/app/layouts/dashboard-b/navbar.php'; ?>
     <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <?php
-        $alertType = flash('success') ? 'success' : 'error';
-        $alertMessage = flash('success') ?: flash('error');
+        $flashSuccess = flash('success');
+        $flashError = flash('error');
+        $alertMessage = $flashSuccess ?: $flashError;
+        $alertType = $flashSuccess ? 'success' : ($flashError ? 'error' : 'info');
         if (!empty($alertMessage)) require BASE_PATH . '/app/components/alert.php';
         ?>
 
@@ -121,6 +157,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 <th>Registered</th>
                                 <th>Status</th>
                                 <th>Method</th>
+                                <th class="whitespace-nowrap text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -151,6 +188,20 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                         Online
                                     <?php endif; ?>
                                 </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex gap-2 justify-end">
+                                        <button type="button" class="btn-secondary btn-sm" data-modal-open="checkinModal-<?= (int) $reg['registration_id'] ?>" <?= $reg['status'] === 'attended' ? 'disabled' : '' ?>>
+                                            <?= icon('check-circle', 'w-4 h-4') ?> Check In
+                                        </button>
+                                        <form method="POST" style="display:inline;">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
+                                            <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this registration? This cannot be undone.">
+                                                <?= icon('trash', 'w-4 h-4') ?>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             <?php endwhile; ?>
                         </tbody>
@@ -167,3 +218,50 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     </main>
     <?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
 </div>
+
+<?php
+$registrations->data_seek(0);
+while ($reg = $registrations->fetch_assoc()):
+    $modalId = 'checkinModal-' . (int) $reg['registration_id'];
+    $modalTitle = 'Check in Attendance';
+    ob_start();
+    $name = $reg['guest_name'] ?: 'Unnamed participant';
+    $rs = $reg['status'];
+?>
+<div class="space-y-2 text-sm mb-4">
+    <div class="flex justify-between">
+        <span class="text-gray-500">Participant</span>
+        <span class="font-medium text-gray-900"><?= e($name) ?></span>
+    </div>
+    <div class="flex justify-between">
+        <span class="text-gray-500">Student ID</span>
+        <span class="font-medium text-gray-900"><?= e($reg['guest_student_id'] ?: '—') ?></span>
+    </div>
+    <div class="flex justify-between">
+        <span class="text-gray-500">Event</span>
+        <span class="font-medium text-gray-900"><?= e($reg['event_title']) ?></span>
+    </div>
+    <div class="flex justify-between">
+        <span class="text-gray-500">Status</span>
+        <span class="badge-info"><?= ucfirst(e($rs)) ?></span>
+    </div>
+</div>
+<?php if ($rs === 'attended'): ?>
+    <div class="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg p-3">
+        <?= icon('check-circle', 'w-5 h-5') ?> This participant has already been checked in.
+    </div>
+<?php else: ?>
+    <form method="POST">
+        <input type="hidden" name="action" value="checkin">
+        <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
+        <div class="flex gap-3 justify-end">
+            <button type="button" class="btn-secondary" data-modal-dismiss="<?= e($modalId) ?>">Cancel</button>
+            <button type="submit" class="btn-success">Confirm Check In</button>
+        </div>
+    </form>
+<?php endif; ?>
+<?php
+    $modalBody = ob_get_clean();
+    require BASE_PATH . '/app/components/modal.php';
+endwhile;
+?>

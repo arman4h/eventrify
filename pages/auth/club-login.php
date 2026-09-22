@@ -28,8 +28,8 @@ if (isPost()) {
         if ($cu && password_verify($password, $cu['password_hash'])) {
             if ($cu['status'] !== 'active') {
                 $error = 'This club account is not active.';
-            } elseif ($cu['club_status'] !== 'approved') {
-                $error = 'Your club is awaiting admin approval.';
+            } elseif ($cu['club_status'] === 'rejected') {
+                $error = 'Your club application was not approved. Please contact the administration.';
             } else {
                 loginClubUser($cu);
                 redirect('/club');
@@ -69,7 +69,7 @@ $pageTitle = 'Club Login';
             <div class="alert alert-info mb-4" role="alert">
                 <div class="flex items-start gap-3">
                     <span class="mt-0.5 shrink-0"><?= icon('info', 'w-5 h-5') ?></span>
-                    <p class="text-sm">Only verified clubs can access the Club Dashboard.</p>
+                    <p class="text-sm">Registered clubs can sign in to track their approval status. Full dashboard access unlocks once your club is approved.</p>
                 </div>
             </div>
 
