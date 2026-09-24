@@ -50,8 +50,27 @@ if (isPost()) {
         $errors[] = 'Title, venue, and start time are required.';
     }
 
-    if ($endTime !== '' && $startTime !== '' && $endTime < $startTime) {
+    $startTs = $startDateTime !== '' ? strtotime($startDateTime) : false;
+    $endTs = $endDateTime !== '' ? strtotime($endDateTime) : false;
+    $deadlineRaw = $registrationDeadline !== '' ? $registrationDeadline : '';
+
+    if ($startTs !== false && $startTs < time()) {
+        $errors[] = 'Event start date/time cannot be in the past.';
+    }
+
+    if ($startTs !== false && $endTs !== false && $endTs < $startTs) {
         $errors[] = 'End time cannot be before the start time.';
+    }
+
+    if ($deadlineRaw !== '') {
+        $deadlineTs = strtotime($deadlineRaw);
+        if ($deadlineTs === false) {
+            $errors[] = 'Registration deadline is not a valid date.';
+        } elseif ($deadlineTs < time()) {
+            $errors[] = 'Registration deadline cannot be in the past.';
+        } elseif ($startTs !== false && $deadlineTs > $startTs) {
+            $errors[] = 'Registration deadline cannot be after the event start date.';
+        }
     }
 
     if (empty($errors)) {
@@ -178,7 +197,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="form-group">
                         <label class="label-required">Date</label>
-                        <input type="date" name="date" class="input" value="<?= e(post('date')) ?>" required>
+                        <input type="date" name="date" class="input" value="<?= e(post('date')) ?>" min="<?= date('Y-m-d') ?>" required>
                     </div>
                     <div class="form-group">
                         <label class="label-required">Start Time</label>
@@ -190,7 +209,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     </div>
                     <div class="form-group">
                         <label class="label">Registration Deadline</label>
-                        <input type="datetime-local" name="registration_deadline" class="input" value="<?= e(post('registration_deadline')) ?>">
+                        <input type="datetime-local" name="registration_deadline" class="input" value="<?= e(post('registration_deadline')) ?>" min="<?= date('Y-m-d\TH:i') ?>">
+                        <p class="form-hint">Must be after now and before the event start.</p>
                     </div>
                 </div>
             </section>
@@ -248,11 +268,21 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     </ul>
                 </div>
                 <p class="text-sm text-gray-500 mb-3">Add custom fields for this specific event (optional).</p>
-                <div id="questionsContainer" class="space-y-4">
+                <div id="questionsContainer" class="space-y-4"></div>
+                <button type="button" id="addQuestion" class="btn-secondary btn-sm mt-3">
+                    <?= icon('plus', 'w-4 h-4') ?> Add Field
+                </button>
+                <template id="questionRowTemplate">
                     <div class="card p-4 space-y-3 question-row">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-700">Custom Field</span>
+                            <button type="button" class="remove-field btn-danger btn-sm" title="Delete this field">
+                                <?= icon('trash', 'w-4 h-4') ?> Delete
+                            </button>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="form-group">
-                                <label class="label">Question Label</label>
+                                <label class="label">Field Label</label>
                                 <input type="text" name="questions[label][]" class="input" placeholder="e.g. T-shirt size">
                             </div>
                             <div class="form-group">
@@ -260,34 +290,42 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 <select name="questions[type][]" class="select">
                                     <option value="short_text">Short Text</option>
                                     <option value="long_text">Long Text</option>
-                                    <option value="number">Number</option>
                                     <option value="dropdown">Dropdown</option>
                                     <option value="radio">Radio</option>
                                     <option value="checkbox">Checkbox</option>
+                                    <option value="number">Number</option>
+                                    <option value="email">Email</option>
                                     <option value="date">Date</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group question-options">
-                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/checkbox)</span></label>
+                        <div class="form-group question-options hidden">
+                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/radio/checkbox)</span></label>
                             <input type="text" name="questions[options][]" class="input" placeholder="e.g. S, M, L, XL">
                         </div>
                         <label class="flex items-center gap-2">
+                            <input type="hidden" name="questions[required][]" value="0">
                             <input type="checkbox" name="questions[required][]" value="1" class="rounded border-gray-300">
                             <span class="text-sm text-gray-700">Required</span>
                         </label>
                     </div>
-                </div>
-                <button type="button" id="addQuestion" class="btn-secondary btn-sm mt-3">
-                    <?= icon('plus', 'w-4 h-4') ?> Add Question
-                </button>
+                </template>
             </section>
 
             <hr class="border-gray-200">
 
             <section>
                 <h3 class="text-base font-semibold text-gray-900 mb-4">Publish</h3>
-                <div class="card p-6">
+                <div class="card p-6 space-y-4">
+                    <div class="form-group">
+                        <label class="label">Event Status</label>
+                        <select name="status" class="select">
+                            <?php foreach (['draft', 'published', 'cancelled', 'completed'] as $s): ?>
+                                <option value="<?= $s ?>" <?= (post('status') ?: 'draft') === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="form-hint">Set to "Published" to make the event visible to students.</p>
+                    </div>
                     <p class="text-sm text-gray-600 mb-1 font-medium" id="previewTitle"><?= e(post('title')) ?: 'Event Title' ?></p>
                     <p class="text-xs text-gray-500 mb-3"><?= e(post('category') ?: 'Category') ?></p>
                     <div class="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
@@ -301,8 +339,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
             </section>
 
             <div class="flex gap-3">
-                <button type="submit" name="status" value="draft" class="btn-secondary">Save Draft</button>
-                <button type="submit" name="status" value="published" class="btn-primary">Publish Event</button>
+                <button type="submit" class="btn-primary">Create Event</button>
+                <a href="<?= url('/club/events') ?>" class="btn-secondary">Cancel</a>
             </div>
         </form>
     </main>
@@ -314,10 +352,8 @@ function toggleQuestionOptions(row) {
     var sel = row.querySelector('select[name="questions[type][]"]');
     var opts = row.querySelector('.question-options');
     if (!sel || !opts) return;
-    var show = sel.value === 'dropdown' || sel.value === 'checkbox';
+    var show = sel.value === 'dropdown' || sel.value === 'radio' || sel.value === 'checkbox';
     opts.classList.toggle('hidden', !show);
-    var input = opts.querySelector('input');
-    if (input) input.disabled = !show;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -326,21 +362,43 @@ document.addEventListener('DOMContentLoaded', function() {
     if (capInput && capDisplay) {
         capInput.addEventListener('input', function() { capDisplay.textContent = this.value || '0'; });
     }
+
     var container = document.getElementById('questionsContainer');
-    container.addEventListener('change', function(e) {
-        if (e.target.matches('select[name="questions[type][]"]')) {
-            toggleQuestionOptions(e.target.closest('.question-row'));
+    var tpl = document.getElementById('questionRowTemplate');
+
+    var dateInput = document.querySelector('input[name="date"]');
+    var startInput = document.querySelector('input[name="start_time"]');
+    var deadlineInput = document.querySelector('input[name="registration_deadline"]');
+    function updateDeadlineMax() {
+        if (dateInput && startInput && deadlineInput && dateInput.value && startInput.value) {
+            deadlineInput.max = dateInput.value + 'T' + startInput.value;
         }
-    });
-    document.getElementById('addQuestion').addEventListener('click', function() {
-        var first = container.querySelector('.question-row');
-        var clone = first.cloneNode(true);
-        clone.querySelectorAll('input, select').forEach(function(el) {
-            if (el.type === 'checkbox') { el.checked = false; } else { el.value = ''; }
+    }
+    if (dateInput) dateInput.addEventListener('change', updateDeadlineMax);
+    if (startInput) startInput.addEventListener('input', updateDeadlineMax);
+    updateDeadlineMax();
+
+    function addQuestionRow() {
+        var node = tpl.content.cloneNode(true);
+        var row = node.querySelector('.question-row');
+        toggleQuestionOptions(row);
+        container.appendChild(node);
+    }
+
+    if (container && tpl) {
+        container.addEventListener('click', function(e) {
+            var btn = e.target.closest('.remove-field');
+            if (btn) {
+                var row = btn.closest('.question-row');
+                if (row) row.remove();
+            }
         });
-        container.appendChild(clone);
-        toggleQuestionOptions(clone);
-    });
-    container.querySelectorAll('.question-row').forEach(toggleQuestionOptions);
+        container.addEventListener('change', function(e) {
+            if (e.target.matches('select[name="questions[type][]"]')) {
+                toggleQuestionOptions(e.target.closest('.question-row'));
+            }
+        });
+        document.getElementById('addQuestion').addEventListener('click', addQuestionRow);
+    }
 });
 </script>

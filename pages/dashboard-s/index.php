@@ -103,7 +103,7 @@ require BASE_PATH . '/app/layouts/dashboard-s/sidebar.php';
                         </div>
                     </div>
                 </div>
-                <a href="<?= url('/events') ?>" class="btn-primary shrink-0">Explore Events</a>
+                <a href="<?= url('/events') ?>" class="btn-primary shrink-0 bg-white">Explore Events</a>
             </div>
         </div>
 

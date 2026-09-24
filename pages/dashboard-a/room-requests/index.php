@@ -144,7 +144,7 @@ foreach ($requests as $request) {
 
     $rows[] = [
         '<span class="text-sm font-medium text-gray-900">' . e($request['club_name'] ?? '—') . '</span>',
-        '<span class="text-sm text-gray-600">' . e($request['event_title'] ?? '—') . '</span>',
+        '<span class="text-sm text-gray-600">' . e($request['event_title'] ?: 'In-Club Session') . '</span>',
         formatDate($request['requested_date'], 'M d, Y'),
         '<span class="text-sm text-gray-600 whitespace-nowrap">' . e(roomSlotLabel((string) $request['start_time'], (string) $request['end_time'])) . '</span>',
         '<span class="text-sm text-gray-600">' . (int) $request['expected_participants'] . '</span>',
@@ -220,7 +220,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                 <div>
                     <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Requested For</p>
                     <div class="space-y-1 text-sm">
-                        <p><span class="text-gray-500">Event:</span> <span class="font-medium text-gray-900"><?= e($reviewRequest['event_title'] ?? '—') ?></span></p>
+                        <p><span class="text-gray-500">Event:</span> <span class="font-medium text-gray-900"><?= e($reviewRequest['event_title'] ?: 'In-Club Session') ?></span></p>
                         <p><span class="text-gray-500">Event venue:</span> <span class="font-medium text-gray-900"><?= e($reviewRequest['event_venue'] ?? '—') ?></span></p>
                     </div>
 

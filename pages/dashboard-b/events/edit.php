@@ -45,8 +45,16 @@ if (isPost()) {
         $errors[] = 'Title, venue, and start time are required.';
     }
 
-    if ($endTime !== '' && $startTime !== '' && $endTime < $startTime) {
+    $startTs = $startDateTime !== '' ? strtotime($startDateTime) : false;
+    $endTs = $endDateTime !== '' ? strtotime($endDateTime) : false;
+    $deadlineRaw = $registrationDeadline !== '' ? $registrationDeadline : '';
+
+    if ($startTs !== false && $endTs !== false && $endTs < $startTs) {
         $errors[] = 'End time cannot be before the start time.';
+    }
+
+    if ($deadlineRaw !== '' && $startTs !== false && strtotime($deadlineRaw) > $startTs) {
+        $errors[] = 'Registration deadline cannot be after the event start date.';
     }
 
     $poster = null;
@@ -241,43 +249,63 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <li class="flex items-center gap-2"><?= icon('grad', 'w-4 h-4 text-blue-600') ?> Department <span class="text-xs text-gray-500">CSE, EEE, DS, English, BBA, EDS, Economics</span></li>
                     </ul>
                 </div>
-                <p class="text-sm text-gray-500 mb-3">Custom fields for this event.</p>
+                <p class="text-sm text-gray-500 mb-3">Add or edit custom fields for this event.</p>
                 <div id="questionsContainer" class="space-y-4">
                     <?php
                     $defaultLabels = ['Full Name', 'Email', 'Student ID', 'Department'];
                     $typeLabels = ['short_text' => 'Short Text', 'long_text' => 'Long Text', 'number' => 'Number', 'email' => 'Email', 'dropdown' => 'Dropdown', 'radio' => 'Radio', 'checkbox' => 'Checkbox', 'date' => 'Date'];
+                    $storedToSelect = ['text' => 'short_text', 'number' => 'number', 'email' => 'email', 'dropdown' => 'dropdown', 'checkbox' => 'checkbox', 'date' => 'date'];
                     foreach ($existingFields as $f) {
                         if (in_array($f['field_label'], $defaultLabels, true)) continue;
+                        $fieldSelect = $storedToSelect[$f['field_type']] ?? $f['field_type'];
                     ?>
                     <div class="card p-4 space-y-3 question-row">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-700">Custom Field</span>
+                            <button type="button" class="remove-field btn-danger btn-sm" title="Delete this field">
+                                <?= icon('trash', 'w-4 h-4') ?> Delete
+                            </button>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="form-group">
-                                <label class="label">Question Label</label>
+                                <label class="label">Field Label</label>
                                 <input type="text" name="questions[label][]" class="input" value="<?= e($f['field_label']) ?>">
                             </div>
                             <div class="form-group">
                                 <label class="label">Field Type</label>
                                 <select name="questions[type][]" class="select">
                                     <?php foreach ($typeLabels as $tKey => $tLabel): ?>
-                                        <option value="<?= $tKey ?>" <?= $f['field_type'] === $tKey ? 'selected' : '' ?>><?= $tLabel ?></option>
+                                        <option value="<?= $tKey ?>" <?= $fieldSelect === $tKey ? 'selected' : '' ?>><?= $tLabel ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group question-options">
-                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/checkbox)</span></label>
+                        <div class="form-group question-options hidden">
+                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/radio/checkbox)</span></label>
                             <input type="text" name="questions[options][]" class="input" value="<?= e($f['field_options']) ?>" placeholder="e.g. S, M, L, XL">
                         </div>
                         <label class="flex items-center gap-2">
+                            <input type="hidden" name="questions[required][]" value="0">
                             <input type="checkbox" name="questions[required][]" value="1" class="rounded border-gray-300" <?= $f['is_required'] ? 'checked' : '' ?>>
                             <span class="text-sm text-gray-700">Required</span>
                         </label>
                     </div>
                     <?php } ?>
+                </div>
+                <button type="button" id="addQuestion" class="btn-secondary btn-sm mt-3">
+                    <?= icon('plus', 'w-4 h-4') ?> Add Field
+                </button>
+                <template id="questionRowTemplate">
                     <div class="card p-4 space-y-3 question-row">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-700">Custom Field</span>
+                            <button type="button" class="remove-field btn-danger btn-sm" title="Delete this field">
+                                <?= icon('trash', 'w-4 h-4') ?> Delete
+                            </button>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="form-group">
-                                <label class="label">Question Label</label>
+                                <label class="label">Field Label</label>
                                 <input type="text" name="questions[label][]" class="input" placeholder="e.g. T-shirt size">
                             </div>
                             <div class="form-group">
@@ -285,27 +313,26 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 <select name="questions[type][]" class="select">
                                     <option value="short_text">Short Text</option>
                                     <option value="long_text">Long Text</option>
-                                    <option value="number">Number</option>
                                     <option value="dropdown">Dropdown</option>
                                     <option value="radio">Radio</option>
                                     <option value="checkbox">Checkbox</option>
+                                    <option value="number">Number</option>
+                                    <option value="email">Email</option>
                                     <option value="date">Date</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group question-options">
-                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/checkbox)</span></label>
+                        <div class="form-group question-options hidden">
+                            <label class="label">Options <span class="form-hint">(comma-separated, for dropdown/radio/checkbox)</span></label>
                             <input type="text" name="questions[options][]" class="input" placeholder="e.g. S, M, L, XL">
                         </div>
                         <label class="flex items-center gap-2">
+                            <input type="hidden" name="questions[required][]" value="0">
                             <input type="checkbox" name="questions[required][]" value="1" class="rounded border-gray-300">
                             <span class="text-sm text-gray-700">Required</span>
                         </label>
                     </div>
-                </div>
-                <button type="button" id="addQuestion" class="btn-secondary btn-sm mt-3">
-                    <?= icon('plus', 'w-4 h-4') ?> Add Question
-                </button>
+                </template>
             </section>
 
             <hr class="border-gray-200">
@@ -336,28 +363,37 @@ function toggleQuestionOptions(row) {
     var sel = row.querySelector('select[name="questions[type][]"]');
     var opts = row.querySelector('.question-options');
     if (!sel || !opts) return;
-    var show = sel.value === 'dropdown' || sel.value === 'checkbox';
+    var show = sel.value === 'dropdown' || sel.value === 'radio' || sel.value === 'checkbox';
     opts.classList.toggle('hidden', !show);
-    var input = opts.querySelector('input');
-    if (input) input.disabled = !show;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     var container = document.getElementById('questionsContainer');
-    container.addEventListener('change', function(e) {
-        if (e.target.matches('select[name="questions[type][]"]')) {
-            toggleQuestionOptions(e.target.closest('.question-row'));
-        }
-    });
-    document.getElementById('addQuestion').addEventListener('click', function() {
-        var first = container.querySelector('.question-row');
-        var clone = first.cloneNode(true);
-        clone.querySelectorAll('input, select').forEach(function(el) {
-            if (el.type === 'checkbox') { el.checked = false; } else { el.value = ''; }
+    var tpl = document.getElementById('questionRowTemplate');
+
+    function addQuestionRow() {
+        var node = tpl.content.cloneNode(true);
+        var row = node.querySelector('.question-row');
+        toggleQuestionOptions(row);
+        container.appendChild(node);
+    }
+
+    if (container && tpl) {
+        container.addEventListener('click', function(e) {
+            var btn = e.target.closest('.remove-field');
+            if (btn) {
+                var row = btn.closest('.question-row');
+                if (row) row.remove();
+            }
         });
-        container.appendChild(clone);
-        toggleQuestionOptions(clone);
-    });
+        container.addEventListener('change', function(e) {
+            if (e.target.matches('select[name="questions[type][]"]')) {
+                toggleQuestionOptions(e.target.closest('.question-row'));
+            }
+        });
+        document.getElementById('addQuestion').addEventListener('click', addQuestionRow);
+    }
+
     container.querySelectorAll('.question-row').forEach(toggleQuestionOptions);
 });
 </script>

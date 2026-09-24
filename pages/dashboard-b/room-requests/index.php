@@ -13,12 +13,20 @@ $clubId = (int) currentUser()['club_id'];
 $slots = roomTimeSlots();
 
 if (isPost()) {
-    $eventId = (int) post('event_id');
+    $rawEventId = post('event_id');
+    $eventId = $rawEventId === 'in_club' ? 0 : (int) $rawEventId;
     $requestedDate = post('requested_date');
     $timeSlot = post('time_slot');
     $expectedParticipants = (int) post('expected_participants');
     $preferredRoom = post('preferred_room');
     $reason = post('reason');
+
+    if ($preferredRoom === '' && $eventId > 0) {
+        $evStmt = $db->prepare("SELECT venue FROM events WHERE event_id = ? AND club_id = ?");
+        $evStmt->bind_param('ii', $eventId, $clubId);
+        $evStmt->execute();
+        $preferredRoom = (string) ($evStmt->get_result()->fetch_assoc()['venue'] ?? '');
+    }
 
     $startTime = '';
     $endTime = '';
@@ -45,10 +53,16 @@ if (isPost()) {
     }
 }
 
-$eventsList = $db->prepare("SELECT event_id, title FROM events WHERE club_id = ? ORDER BY start_time DESC");
-$eventsList->bind_param('i', $clubId);
-$eventsList->execute();
-$eventsResult = $eventsList->get_result();
+$eventsStmt = $db->prepare("SELECT event_id, title, venue FROM events WHERE club_id = ? ORDER BY start_time DESC");
+$eventsStmt->bind_param('i', $clubId);
+$eventsStmt->execute();
+$eventsResult = $eventsStmt->get_result();
+
+$eventsData = [];
+while ($ev = $eventsResult->fetch_assoc()) {
+    $eventsData[] = $ev;
+}
+$eventVenuesJson = json_encode(array_column($eventsData, 'venue', 'event_id'));
 
 $requestsList = $db->prepare("SELECT rr.*, e.title as event_title FROM room_requests rr LEFT JOIN events e ON e.event_id = rr.event_id WHERE rr.club_id = ? ORDER BY rr.requested_date DESC");
 $requestsList->bind_param('i', $clubId);
@@ -82,12 +96,14 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="form-group">
                         <label class="label-required">Event</label>
-                        <select name="event_id" class="select" required>
+                        <select name="event_id" id="roomEventSelect" class="select" required>
                             <option value="">Select event...</option>
-                            <?php while ($ev = $eventsResult->fetch_assoc()): ?>
-                                <option value="<?= $ev['event_id'] ?>"><?= e($ev['title']) ?></option>
-                            <?php endwhile; ?>
+                            <option value="in_club">In-Club Session</option>
+                            <?php foreach ($eventsData as $ev): ?>
+                                <option value="<?= (int) $ev['event_id'] ?>"><?= e($ev['title']) ?></option>
+                            <?php endforeach; ?>
                         </select>
+                        <p class="form-hint">Choose an event, or select "In-Club Session" for a room request not tied to an event.</p>
                     </div>
                     <div class="form-group">
                         <label class="label-required">Requested Date</label>
@@ -107,8 +123,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <input type="number" name="expected_participants" class="input" min="1" value="<?= e(post('expected_participants')) ?>">
                     </div>
                     <div class="form-group">
-                        <label class="label">Preferred Room</label>
-                        <input type="text" name="preferred_room" class="input" value="<?= e(post('preferred_room')) ?>" placeholder="e.g. Room 301">
+                        <label class="label">Room Number</label>
+                        <input type="text" name="preferred_room" id="preferredRoom" class="input" value="<?= e(post('preferred_room')) ?>" readonly placeholder="Select an event to auto-fill">
+                        <p class="form-hint" id="roomHint">Auto-filled from the event's venue. To change the room, edit the event.</p>
                     </div>
                 </div>
                 <div class="form-group">
@@ -147,7 +164,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <tbody>
                             <?php while ($req = $requestsResult->fetch_assoc()): ?>
                             <tr>
-                                <td class="font-medium text-gray-900"><?= e($req['event_title'] ?: '—') ?></td>
+                                <td class="font-medium text-gray-900"><?= e($req['event_title'] ?: 'In-Club Session') ?></td>
                                 <td class="whitespace-nowrap text-sm text-gray-600"><?= formatDate($req['requested_date']) ?></td>
                                 <td class="text-sm text-gray-600"><?= e(roomSlotLabel($req['start_time'], $req['end_time'])) ?></td>
                                 <td class="text-sm text-gray-600"><?= (int) $req['expected_participants'] ?></td>
@@ -178,3 +195,38 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     </main>
     <?php require BASE_PATH . '/app/layouts/dashboard-b/footer.php'; ?>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var eventSelect = document.getElementById('roomEventSelect');
+    var roomInput = document.getElementById('preferredRoom');
+    var roomHint = document.getElementById('roomHint');
+    var venues = <?= $eventVenuesJson ?>;
+
+    function syncRoom() {
+        if (!eventSelect || !roomInput || !roomHint) return;
+        var val = eventSelect.value;
+        if (val === 'in_club') {
+            roomInput.value = '';
+            roomInput.readOnly = false;
+            roomInput.placeholder = 'e.g. Room 301';
+            roomHint.textContent = 'No linked event - enter the room you need for this session.';
+        } else if (val) {
+            roomInput.value = venues[val] || '';
+            roomInput.readOnly = true;
+            roomInput.placeholder = 'Select an event to auto-fill';
+            roomHint.textContent = "Auto-filled from the event's venue. To change the room, edit the event.";
+        } else {
+            roomInput.value = '';
+            roomInput.readOnly = true;
+            roomInput.placeholder = 'Select an event to auto-fill';
+            roomHint.textContent = "Auto-filled from the event's venue. To change the room, edit the event.";
+        }
+    }
+
+    if (eventSelect) {
+        eventSelect.addEventListener('change', syncRoom);
+        syncRoom();
+    }
+});
+</script>

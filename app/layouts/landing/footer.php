@@ -27,7 +27,7 @@
                     <ul class="space-y-2">
                         <li><a href="<?= url('/club/register') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">For Clubs</a></li>
                         <li><a href="<?= url('/login') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Student Login</a></li>
-                        <li><a href="<?= url('/about') ?>#contact" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Contact</a></li>
+                        <li><a href="<?= url('/admin') ?>#contact" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Admin Login</a></li>
                     </ul>
                 </div>
 

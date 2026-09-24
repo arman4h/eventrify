@@ -278,7 +278,7 @@ function insertRegistrationFields(mysqli $db, int $eventId, array $posted): void
         $label = trim($qLabels[$i] ?? '');
         if ($label === '') continue;
         $type = $typeMap[trim($qTypes[$i] ?? '')] ?? 'text';
-        $required = isset($qRequired[$i]) ? 1 : 0;
+        $required = !empty($qRequired[$i]) ? 1 : 0;
         $options = trim($qOptions[$i] ?? '');
         $fieldStmt->bind_param('isssii', $eventId, $label, $type, $options, $required, $order);
         $fieldStmt->execute();
