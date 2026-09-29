@@ -10,6 +10,7 @@
 
 ## Reference
 
+- [database-report.md](./database-report.md) — every table, column, and relationship, delete-cascade rules, an ER diagram, and a verified query cookbook
 - [../README.md](../README.md) — features, setup, database, routes, and roles
 - [../runcommand.md](../runcommand.md) — how to run it locally
 - [../database/finalschema.sql](../database/finalschema.sql) — the authoritative schema and seed data

@@ -47,7 +47,10 @@ if ($page > $totalPages) {
 
 $sql = "SELECT e.event_id, e.title, e.category, e.start_time, e.capacity, e.status, e.venue,
         c.club_name,
-        (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.event_id) AS reg_count
+        (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.event_id) AS reg_count,
+        (SELECT COUNT(*) FROM event_registrations er
+          WHERE er.event_id = e.event_id
+            AND er.status IN ('registered', 'waitlisted')) AS live_count
         FROM events e
         LEFT JOIN clubs c ON c.club_id = e.club_id
         $whereSql
@@ -66,14 +69,24 @@ $columns = ['Event', 'Club', 'Category', 'Date', 'Registrations', 'Capacity', 'S
 $rows = [];
 
 foreach ($events as $event) {
-    $actions = '<div class="flex items-center justify-end gap-2">'
-    . '<a href="' . e(url('/event?event_id=' . $event['event_id'])) . '" class="btn-ghost btn-sm">View</a>'
-    . '<form method="POST" action="' . e(url('/admin/events/delete')) . '" onsubmit="return confirm(\'Are you sure you want to delete this event? This cannot be undone.\');">
-<?= csrfField() ?>'
-    . '<input type="hidden" name="event_id" value="' . (int) $event['event_id'] . '">'
-    . '<button type="submit" class="btn-ghost btn-sm text-red-600 hover:text-red-700">Delete</button>'
-    . '</form>'
-    . '</div>';
+    $liveCount = (int) $event['live_count'];
+
+    // The delete button used to be a form assembled as a single-quoted
+    // string, so the CSRF tag was written out as literal text instead of a
+    // token and every POST died on verifyCsrf() with "Session expired". It is
+    // now a link to a confirmation screen that posts its own token.
+    ob_start();
+    ?>
+    <div class="flex items-center justify-end gap-2">
+        <a href="<?= e(url('/event?event_id=' . $event['event_id'])) ?>" class="btn-ghost btn-sm">View</a>
+        <a href="<?= e(url('/admin/events/delete?event_id=' . $event['event_id'])) ?>"
+           class="btn-ghost btn-sm <?= $liveCount > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-700' ?>"
+           <?= $liveCount > 0 ? 'aria-disabled="true" tabindex="-1" title="This event has live registrations and cannot be deleted."' : 'title="Delete this event and archive a copy"' ?>>
+            Delete
+        </a>
+    </div>
+    <?php
+    $actions = ob_get_clean();
 
     $eventCell = '<div class="min-w-0">
         <p class="font-medium text-gray-900 truncate">' . e($event['title']) . '</p>
@@ -91,7 +104,10 @@ foreach ($events as $event) {
         '<span class="text-sm text-gray-600">' . e($event['club_name'] ?? '—') . '</span>',
         '<span class="text-sm text-gray-600">' . e($event['category'] ?? '—') . '</span>',
         formatDate($event['start_time'], 'M d, Y'),
-        '<span class="text-sm font-medium text-gray-900">' . (int) $event['reg_count'] . '</span>',
+        '<span class="text-sm font-medium text-gray-900">' . (int) $event['reg_count'] . '</span>'
+            . ($liveCount > 0
+                ? '<span class="ml-1 text-xs text-amber-600" title="Live registrations still hold a place on this event">(' . $liveCount . ' live)</span>'
+                : ''),
         '<span class="text-sm text-gray-600">' . (int) $event['capacity'] . '</span>',
         $statusCell,
         $actions,
@@ -109,7 +125,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
         <div class="page-header">
             <div>
                 <h1 class="page-title">Event Manage</h1>
-                <p class="page-subtitle">All events across the platform. Admins can view or delete any event from any club at any time.</p>
+                <p class="page-subtitle">All events across the platform. Admins can delete any event from any club; the details are kept in an admin-only history.</p>
             </div>
         </div>
 

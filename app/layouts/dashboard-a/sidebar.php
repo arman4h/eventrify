@@ -32,6 +32,11 @@
             Event Manage
         </a>
 
+        <a href="<?= url('/admin/events/history') ?>" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium <?= $activePage === 'event-history' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' ?>">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Event History
+        </a>
+
         <a href="<?= url('/admin/users') ?>" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium <?= $activePage === 'users' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' ?>">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-2.209 2.239-4 5-4s5 1.791 5 4m-5-10a3 3 0 100-6 3 3 0 000 6z"/></svg>
             Users

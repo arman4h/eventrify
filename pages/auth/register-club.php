@@ -77,20 +77,8 @@ if (isPost()) {
         $errors[] = 'You must confirm that you are authorized to represent this club.';
     }
 
-    if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
-        $tmpPath      = $_FILES['logo']['tmp_name'];
-        $mime         = mime_content_type($tmpPath);
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        $size         = (int) $_FILES['logo']['size'];
-
-        if (!in_array($mime, $allowedMimes, true)) {
-            $errors[] = 'Logo must be a JPG, PNG, WebP, or GIF image.';
-        } elseif ($size > 2 * 1024 * 1024) {
-            $errors[] = 'Logo image must be 2MB or smaller.';
-        } else {
-            $logoData = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($tmpPath));
-        }
-    }
+    [$logoData, $logoError] = readImageUpload($_FILES['logo'] ?? null, 'Logo');
+    vAdd($errors, $logoError);
 
     if (empty($errors)) {
         $checkEmail = $db->prepare("SELECT club_user_id FROM club_users WHERE email IN (?, ?) LIMIT 1");
@@ -240,7 +228,7 @@ $pageTitle = 'Request Club Access';
                         <div class="form-group mt-4">
                             <label for="logo" class="label">Club Logo</label>
                             <input type="file" id="logo" name="logo" class="input" accept="image/*">
-                            <p class="form-hint">PNG or JPG, max 2MB</p>
+                            <p class="form-hint">PNG or JPG, max <?= e(formatBytes(imageUploadLimitBytes())) ?></p>
                         </div>
                     </div>
 

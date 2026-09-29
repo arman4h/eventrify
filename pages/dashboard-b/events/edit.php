@@ -37,6 +37,7 @@ if (isPost()) {
     $date = post('date');
     $startTime = post('start_time');
     $endTime = post('end_time');
+    $endDate = post('end_date');
     $venue = post('venue');
     $capacity = (int) post('capacity');
     $registrationDeadline = post('registration_deadline');
@@ -48,10 +49,17 @@ if (isPost()) {
     }
 
     $startDateTime = ($date !== '' && $startTime !== '') ? "$date $startTime:00" : '';
-    $endDateTime = ($date !== '' && $endTime !== '') ? "$date $endTime:00" : '';
+    // An end date is only needed for an event that finishes after midnight, so it
+    // falls back to the event date. Without this an overnight event could not be
+    // saved at all, and a two-day event would be silently pulled back to one day.
+    $endDay = ($endDate !== '' ? $endDate : $date);
+    $endDateTime = ($endDay !== '' && $endTime !== '') ? "$endDay $endTime:00" : '';
 
     if ($title === '' || $venue === '' || $startDateTime === '') {
         $errors[] = 'Title, venue, and start time are required.';
+    }
+    if ($startDateTime !== '' && $endDateTime === '') {
+        $errors[] = 'End time is required.';
     }
 
     // Match the column widths so oversized input is refused up front instead of
@@ -65,29 +73,22 @@ if (isPost()) {
     $endTs = $endDateTime !== '' ? strtotime($endDateTime) : false;
     $deadlineRaw = $registrationDeadline !== '' ? $registrationDeadline : '';
 
-    if ($startTs !== false && $endTs !== false && $endTs < $startTs) {
-        $errors[] = 'End time cannot be before the start time.';
+    if ($startTs !== false && $endTs !== false && $endTs <= $startTs) {
+        $errors[] = 'End time must be after the start time.';
     }
 
-    if ($deadlineRaw !== '' && $startTs !== false && strtotime($deadlineRaw) > $startTs) {
-        $errors[] = 'Registration deadline cannot be after the event start date.';
+    if ($deadlineRaw !== '') {
+        $deadlineTs = strtotime($deadlineRaw);
+        if ($deadlineTs === false) {
+            $errors[] = 'Registration deadline is not a valid date and time.';
+        } elseif ($startTs !== false && $deadlineTs >= $startTs) {
+            $errors[] = 'Registration deadline must be before the event start date and time.';
+        }
     }
 
     $poster = null;
-    if (isset($_FILES['poster']) && $_FILES['poster']['error'] === UPLOAD_ERR_OK) {
-        $tmpPath = $_FILES['poster']['tmp_name'];
-        $mime = mime_content_type($tmpPath);
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        $size = (int) $_FILES['poster']['size'];
-
-        if (!in_array($mime, $allowedMimes, true)) {
-            $errors[] = 'Poster must be a JPG, PNG, WebP, or GIF image.';
-        } elseif ($size > 5 * 1024 * 1024) {
-            $errors[] = 'Poster image must be 5MB or smaller.';
-        } else {
-            $poster = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($tmpPath));
-        }
-    }
+    [$poster, $posterError] = readImageUpload($_FILES['poster'] ?? null, 'Poster');
+    vAdd($errors, $posterError);
 
     if (empty($errors)) {
         if ($poster !== null) {
@@ -131,8 +132,12 @@ if (isPost()) {
             $_SESSION['flash']['success'] = 'Event updated successfully.';
             redirect('/club/events');
         } catch (mysqli_sql_exception $e) {
+            // A dropped connection (2006) is unrecoverable on this handle, so
+            // sending the user back is the only way to stop every later query
+            // in this request from failing with a fatal 500.
             error_log('Event update failed: ' . $e->getMessage());
-            $errors[] = 'Failed to update event.';
+            flash('error', dbErrorMessage($e, 'Failed to update event. Please try again.'));
+            redirect('/club/events/edit?event_id=' . $eventId);
         }
     }
 }
@@ -140,6 +145,7 @@ if (isPost()) {
 $evDate = isPost() ? post('date') : date('Y-m-d', strtotime($event['start_time']));
 $evStartTime = isPost() ? post('start_time') : date('H:i', strtotime($event['start_time']));
 $evEndTime = isPost() ? post('end_time') : ($event['end_time'] ? date('H:i', strtotime($event['end_time'])) : '');
+$evEndDate = isPost() ? post('end_date') : ($event['end_time'] ? date('Y-m-d', strtotime($event['end_time'])) : '');
 $evDeadline = isPost() ? post('registration_deadline') : ($event['registration_deadline'] ? date('Y-m-d\TH:i', strtotime($event['registration_deadline'])) : '');
 
 $existingFields = [];
@@ -169,6 +175,15 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <p class="page-subtitle">Update event details</p>
             </div>
         </div>
+
+        <?php
+        $flashError = flash('error');
+        if ($flashError !== null) {
+            $alertType = 'error';
+            $alertMessage = $flashError;
+            require BASE_PATH . '/app/components/alert.php';
+        }
+        ?>
 
         <?php foreach ($errors as $error): ?>
             <?php
@@ -208,7 +223,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                             </div>
                         <?php endif; ?>
                         <input type="file" name="poster" accept="image/*" class="input">
-                        <p class="form-hint">Leave empty to keep the current poster. Accepted: JPG, PNG, WebP, GIF.</p>
+                        <p class="form-hint">Leave empty to keep the current poster. Accepted: JPG, PNG, WebP, GIF (max <?= e(formatBytes(imageUploadLimitBytes())) ?>).</p>
                     </div>
                 </div>
             </section>
@@ -227,12 +242,19 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <input type="time" name="start_time" class="input" value="<?= e($evStartTime) ?>" required>
                     </div>
                     <div class="form-group">
-                        <label class="label">End Time</label>
-                        <input type="time" name="end_time" class="input" value="<?= e($evEndTime) ?>">
+                        <label class="label-required">End Time</label>
+                        <input type="time" name="end_time" class="input" value="<?= e($evEndTime) ?>" required>
+                        <p class="form-hint">The event must end after it starts.</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">End Date</label>
+                        <input type="date" name="end_date" class="input" value="<?= e($evEndDate) ?>">
+                        <p class="form-hint">Only change this when the event finishes after midnight, such as a two-day event.</p>
                     </div>
                     <div class="form-group">
                         <label class="label">Registration Deadline</label>
                         <input type="datetime-local" name="registration_deadline" class="input" value="<?= e($evDeadline) ?>">
+                        <p class="form-hint">Must be before the event start date and time.</p>
                     </div>
                 </div>
             </section>
@@ -390,6 +412,24 @@ function toggleQuestionOptions(row) {
 document.addEventListener('DOMContentLoaded', function() {
     var container = document.getElementById('questionsContainer');
     var tpl = document.getElementById('questionRowTemplate');
+
+    // Keep the browser in step with the server rules: the deadline has to sit
+    // before the start, and the end date can never fall before the start date.
+    var dateInput = document.querySelector('input[name="date"]');
+    var startInput = document.querySelector('input[name="start_time"]');
+    var endDateInput = document.querySelector('input[name="end_date"]');
+    var deadlineInput = document.querySelector('input[name="registration_deadline"]');
+    function syncScheduleBounds() {
+        if (dateInput && startInput && deadlineInput && dateInput.value && startInput.value) {
+            deadlineInput.max = dateInput.value + 'T' + startInput.value;
+        }
+        if (dateInput && endDateInput) {
+            endDateInput.min = dateInput.value;
+        }
+    }
+    if (dateInput) dateInput.addEventListener('change', syncScheduleBounds);
+    if (startInput) startInput.addEventListener('input', syncScheduleBounds);
+    syncScheduleBounds();
 
     function addQuestionRow() {
         var node = tpl.content.cloneNode(true);

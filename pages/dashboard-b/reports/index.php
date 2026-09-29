@@ -318,32 +318,22 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 
         <div class="space-y-6">
             <div class="card p-6">
-                <h3 class="text-base font-semibold text-gray-900 mb-4">Status breakdown</h3>
+                <h3 class="text-base font-semibold text-gray-900 mb-1">Status breakdown</h3>
+                <p class="text-xs text-gray-500 mb-5">How every report filed against this club ended up.</p>
                 <?php
                 $breakdown = [
-                    ['label' => 'Open',         'bar' => 'bg-red-400',    'value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'open'")],
-                    ['label' => 'Under review', 'bar' => 'bg-amber-400',  'value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'under_review'")],
-                    ['label' => 'Resolved',     'bar' => 'bg-emerald-400','value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'resolved'")],
-                    ['label' => 'Dismissed',    'bar' => 'bg-gray-400',   'value' => (int) $dismissedReportCount],
+                    ['label' => 'Open',         'color' => '#f87171', 'value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'open'")],
+                    ['label' => 'Under review', 'color' => '#fbbf24', 'value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'under_review'")],
+                    ['label' => 'Resolved',     'color' => '#34d399', 'value' => $clubCount("SELECT COUNT(*) AS c FROM reports r WHERE $REPORT_SCOPE AND r.status = 'resolved'")],
+                    ['label' => 'Dismissed',    'color' => '#9ca3af', 'value' => (int) $dismissedReportCount],
                 ];
-                $maxBreakdown = 1;
-                foreach ($breakdown as $row) {
-                    $maxBreakdown = max($maxBreakdown, (int) $row['value']);
-                }
                 ?>
-                <div class="space-y-3">
-                    <?php foreach ($breakdown as $row): ?>
-                        <div>
-                            <div class="flex items-center justify-between text-sm mb-1">
-                                <span class="text-gray-600"><?= e($row['label']) ?></span>
-                                <span class="font-medium text-gray-900"><?= (int) $row['value'] ?></span>
-                            </div>
-                            <div class="progress-bar">
-                                <div class="progress-fill <?= $row['bar'] ?>" style="width: <?= round(((int) $row['value'] / $maxBreakdown) * 100) ?>%"></div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                <?php
+                $pieSlices  = $breakdown;
+                $pieCenter  = (string) (int) $totalReports;
+                $pieCaption = $totalReports === 1 ? 'report' : 'reports';
+                require BASE_PATH . '/app/components/pie-chart.php';
+                ?>
             </div>
 
             <div class="card p-6">

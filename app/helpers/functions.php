@@ -7,6 +7,8 @@ require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/rooms.php';
 require_once __DIR__ . '/reporting.php';
+require_once __DIR__ . '/uploads.php';
+require_once __DIR__ . '/archive.php';
 
 function e(?string $value): string
 {

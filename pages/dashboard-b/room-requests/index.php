@@ -36,22 +36,38 @@ $event   = $eventsById[$eventId] ?? null;
 $requiredSlots = [];
 $eventStart    = '';
 $eventEnd      = '';
+$eventDate     = '';
 if ($event) {
     $eventStart = (string) $event['start_time'];
     $eventEnd   = (string) $event['end_time'];
+    $eventDate  = substr($eventStart, 0, 10);
     $requiredSlots = roomSlotsOverlapping($eventStart, $eventEnd);
-    // Never demand more than the grid allows in one request.
+    // Never demand more than one request can hold.
     $requiredSlots = array_slice($requiredSlots, 0, ROOM_MAX_SLOTS_PER_REQUEST);
 }
 
-$requestedDate = (string) get('date', date('Y-m-d', strtotime('+7 days')));
-if (strtotime($requestedDate) === false) {
+$venuePreference = $event ? trim((string) $event['venue']) : '';
+
+// Linking an event fills the form in from the event itself: the day it runs, the
+// headcount it is planned for and the room it is held in. Anything the requester
+// put in the query string wins, so a deliberate override is never overwritten.
+$requestedDate = trim((string) get('date', ''));
+if ($requestedDate === '' && $eventDate !== '') {
+    $requestedDate = $eventDate;
+}
+if ($requestedDate === '' || strtotime($requestedDate) === false) {
     $requestedDate = date('Y-m-d', strtotime('+7 days'));
 }
 
-$participants   = max(0, (int) get('participants', 0));
-$selectedRoom   = trim((string) get('room', ''));
-$venuePreference = $event ? trim((string) $event['venue']) : '';
+$participants = max(0, (int) get('participants', 0));
+if ($participants === 0 && $event) {
+    $participants = max(0, (int) $event['capacity']);
+}
+
+$selectedRoom = trim((string) get('room', ''));
+if ($selectedRoom === '' && $venuePreference !== '') {
+    $selectedRoom = $venuePreference;
+}
 
 // ── JSON endpoint for the "Recommend a room" button ───────────────────
 if ((string) get('recommend', '') === '1') {
@@ -177,23 +193,29 @@ if (isPost()) {
     }
 
     if ($event && count($slotIndices) > 0 && !slotsCoverWindow($slotIndices, (string) $event['start_time'], (string) $event['end_time'])) {
-        $overlapping = array_slice(
-            roomSlotsOverlapping((string) $event['start_time'], (string) $event['end_time']),
-            0,
-            ROOM_MAX_SLOTS_PER_REQUEST
-        );
+        $allOverlapping = roomSlotsOverlapping((string) $event['start_time'], (string) $event['end_time']);
         $needed = roomBatchSlotSummary(array_map(static function (int $i) use ($slots): array {
             return ['start' => $slots[$i]['start'], 'end' => $slots[$i]['end']];
-        }, $overlapping));
+        }, $allOverlapping));
 
         $from = formatClockTime((string) $event['start_time']);
         $to   = formatClockTime((string) $event['end_time']);
-        $errors[] = '"' . $event['title'] . '" runs from ' . $from . ' to ' . $to
-            . ', which is covered by ' . $needed . '. Please pick that slot.';
-        if (count($overlapping) === 2) {
-            // Build the example from the event's own window, never a fixed time.
-            $errors[] = 'A ' . $from . ' to ' . $to . ' event therefore needs two slots: '
-                . roomSlotKey($overlapping[0]) . ' and ' . roomSlotKey($overlapping[1]) . '.';
+        $lastSlotEnd = (string) $slots[count($slots) - 1]['end'];
+
+        if (count($allOverlapping) > ROOM_MAX_SLOTS_PER_REQUEST) {
+            // Truncating here would claim two slots cover the event when they
+            // plainly do not, so say how many the event really spans.
+            $errors[] = '"' . $event['title'] . '" runs from ' . $from . ' to ' . $to
+                . ', which spans ' . count($allOverlapping) . ' slots (' . $needed . ').'
+                . ' A single request holds at most ' . ROOM_MAX_SLOTS_PER_REQUEST
+                . ', so shorten the event or book a shorter block.';
+        } elseif (minutesSinceMidnight((string) $event['end_time']) > minutesSinceMidnight($lastSlotEnd)) {
+            $errors[] = '"' . $event['title'] . '" runs from ' . $from . ' to ' . $to
+                . ', but the last bookable slot ends at ' . formatClockTime($lastSlotEnd) . '.'
+                . ' A room cannot be held for the whole event — shorten it, or split it into two events.';
+        } else {
+            $errors[] = '"' . $event['title'] . '" runs from ' . $from . ' to ' . $to
+                . ', which needs ' . $needed . '. Please pick that slot.';
         }
     }
 
@@ -277,7 +299,6 @@ if (isPost()) {
 }
 
 // ── Availability for the chosen date ──────────────────────────────────
-$grid        = roomAvailabilityGrid($requestedDate, $clubId);
 $availability = roomAvailability($requestedDate, $clubId);
 
 // Pre-select the slots the linked event needs, else nothing.
@@ -296,10 +317,35 @@ $listStmt->bind_param('i', $clubId);
 $listStmt->execute();
 $batches = roomRequestBatches($listStmt->get_result()->fetch_all(MYSQLI_ASSOC) ?? []);
 
-$eventVenuesJson = json_encode(array_column($eventsData, 'venue', 'event_id'));
+// Everything the browser needs to fill the form in the moment an event is
+// picked, so the requester does not have to press anything.
+$allSlots = roomTimeSlots();
+$eventMeta = [];
+
+foreach ($eventsData as $ev) {
+    $start = (string) $ev['start_time'];
+    $end   = (string) $ev['end_time'];
+
+    $needed = array_slice(roomSlotsOverlapping($start, $end), 0, ROOM_MAX_SLOTS_PER_REQUEST);
+
+    $eventMeta[(string) (int) $ev['event_id']] = [
+        'date'     => substr($start, 0, 10),
+        'venue'    => trim((string) $ev['venue']),
+        'capacity' => (int) $ev['capacity'],
+        'slots'    => $needed,
+        'labels'   => array_values(array_map(
+            static function (int $i) use ($allSlots): string {
+                return (string) ($allSlots[$i]['label'] ?? '');
+            },
+            $needed
+        )),
+    ];
+}
+
 $slotMetaJson    = json_encode(array_map(static function (array $s): array {
     return ['start' => $s['start'], 'end' => $s['end'], 'label' => $s['label']];
 }, $slots));
+$eventMetaJson   = json_encode($eventMeta, JSON_UNESCAPED_SLASHES);
 
 $roomOptions = roomCatalog();
 
@@ -320,7 +366,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
         <div class="page-header mb-6">
             <div>
                 <h2 class="page-title">Room Requests</h2>
-                <p class="page-subtitle">Book one or two time slots for your event, and see what is already taken.</p>
+                <p class="page-subtitle">Book one or two time slots for your event.</p>
             </div>
         </div>
 
@@ -336,7 +382,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <form method="GET" action="<?= url('/club/room-requests') ?>" id="roomRequestForm" class="card p-6<?= $canManage ? '' : ' hidden' ?>">
                     <h3 class="text-base font-semibold text-gray-900 mb-1">New Request</h3>
                     <p class="text-sm text-gray-500 mb-5">
-                        Rooms are booked in fixed slots. Book one slot, or two back-to-back slots if you need longer.
+                        Pick one of your events and the date, headcount, room and time slots fill in for you.
+                        You can still change any of them before you submit.
                     </p>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -351,7 +398,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="form-hint">Linking an event fills in the room and the time you need.</p>
+                            <p class="form-hint">Picking an event fills in the date, headcount, room and slots from that event.</p>
                         </div>
 
                         <div class="form-group">
@@ -445,8 +492,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 
                     <div class="flex flex-wrap items-center gap-3 pt-2">
                         <button type="submit" class="btn-primary">
-                            <?= icon('calendar', 'w-4 h-4') ?>
-                            Check availability
+                            <?= icon('check-circle', 'w-4 h-4') ?>
+                            Review booking
                         </button>
                         <button type="button" class="btn-secondary" id="recommendBtn">
                             <?= icon('check-circle', 'w-4 h-4') ?>
@@ -481,69 +528,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 </form>
             </div>
 
-            <!-- ── Availability grid ─────────────────────────────────── -->
+            <!-- ── How slots work ──────────────────────────────────── -->
             <div class="space-y-6">
-                <div class="card p-6">
-                    <h3 class="text-base font-semibold text-gray-900 mb-1">Availability</h3>
-                    <p class="text-xs text-gray-500 mb-4">
-                        <?= e(formatDate($requestedDate, 'D, M d Y')) ?> — grey slots are already taken by another club.
-                    </p>
-
-                    <?php if (count($grid['rooms']) === 0): ?>
-                        <p class="text-sm text-gray-500 text-center py-6">No rooms recorded yet.</p>
-                    <?php else: ?>
-                        <div class="overflow-x-auto">
-                            <table class="table text-xs">
-                                <thead>
-                                    <tr>
-                                        <th class="whitespace-nowrap">Room</th>
-                                        <?php foreach ($slots as $i => $slot): ?>
-                                            <th class="text-center px-1" title="<?= e($slot['label']) ?>">
-                                                <?= e(formatClockTime($slot['start'])) ?>
-                                            </th>
-                                        <?php endforeach; ?>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($grid['rooms'] as $roomRow): ?>
-                                        <tr class="<?= $selectedRoom === $roomRow['room'] ? 'bg-blue-50/60' : '' ?>">
-                                            <td class="whitespace-nowrap font-medium text-gray-900">
-                                                <?= e($roomRow['room']) ?>
-                                                <?php if ($roomRow['capacity'] > 0): ?>
-                                                    <span class="text-gray-400 font-normal">~<?= (int) $roomRow['capacity'] ?></span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <?php foreach ($slots as $i => $slot):
-                                                $cell = $roomRow['cells'][$i];
-                                            ?>
-                                                <td class="text-center px-1">
-                                                    <?php if ($cell['free']): ?>
-                                                        <span class="inline-block w-5 h-5 rounded bg-emerald-100 text-emerald-700"
-                                                              title="Free"><?= icon('check', 'w-3 h-3 mx-auto') ?></span>
-                                                    <?php else: ?>
-                                                        <span class="inline-block w-5 h-5 rounded bg-gray-200 text-gray-500"
-                                                              title="<?= e($cell['club'] . ' — ' . $cell['status']) ?>">
-                                                            <?= icon('x', 'w-3 h-3 mx-auto') ?>
-                                                        </span>
-                                                    <?php endif; ?>
-                                                </td>
-                                            <?php endforeach; ?>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                            <span class="flex items-center gap-1.5">
-                                <span class="inline-block w-3 h-3 rounded bg-emerald-100"></span>Free
-                            </span>
-                            <span class="flex items-center gap-1.5">
-                                <span class="inline-block w-3 h-3 rounded bg-gray-200"></span>Taken
-                            </span>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
                 <div class="card p-6">
                     <h3 class="text-base font-semibold text-gray-900 mb-2">How slots work</h3>
                     <div class="text-sm text-gray-600 space-y-2 leading-relaxed">
@@ -571,7 +557,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <?php
                 $emptyIcon = 'building';
                 $emptyTitle = 'No room requests';
-                $emptyText = 'Pick a date above to see what is free, then submit your first request.';
+                $emptyText = 'Pick one of your events above to fill in a request, then submit it.';
                 require BASE_PATH . '/app/components/empty-state.php';
                 ?>
             <?php else: ?>
@@ -651,7 +637,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
     var MAX_SLOTS = <?= ROOM_MAX_SLOTS_PER_REQUEST ?>;
     var REQUIRED = <?= json_encode($requiredSlots) ?>;
 
-    var venues = <?= $eventVenuesJson ?>;
+    var EVENTS = <?= $eventMetaJson ?>;
     var eventSelect = document.getElementById('roomEventSelect');
     var roomSelect = document.getElementById('preferred_room');
     var dateInput = document.getElementById('requested_date');
@@ -722,19 +708,59 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
         updateSlotHint();
     });
 
-    // Picking an event fills in the room it is held in.
+    // Picking an event fills the whole form in from the event's own record:
+    // the day it runs, the headcount it is planned for, the room it is held in
+    // and the slots its time falls into.
     eventSelect.addEventListener('change', function () {
         var val = eventSelect.value;
-        if (val && val !== 'in_club' && venues[val]) {
-            if (roomSelect.value) { roomSelect.value = venues[val]; }
-            roomHint.textContent = 'Filled in from the event venue: ' + venues[val] + '.';
-        } else {
+        var meta = (val && val !== 'in_club') ? EVENTS[val] : null;
+
+        if (!meta) {
             roomHint.textContent = 'Pick the room you need, or use the recommendation below.';
+            updateSlotHint();
+            return;
+        }
+
+        var filled = [];
+
+        if (meta.date) {
+            dateInput.value = meta.date;
+            filled.push('date ' + meta.date);
+        }
+        if (meta.capacity > 0) {
+            participantsInput.value = meta.capacity;
+            filled.push('participants ' + meta.capacity);
+        }
+        if (meta.venue) {
+            // Only overwrite the room if it is still empty or still the one this
+            // same event filled in earlier, so a manual pick is never lost.
+            if (!roomSelect.value || roomSelect.value === (EVENTS[val] || {}).venue) {
+                roomSelect.value = meta.venue;
+            }
+            filled.push('room ' + meta.venue);
+        }
+
+        // Tick the slots the event's window needs, e.g. a 2:00-4:00 event picks
+        // 1:50-3:10 plus 3:10-4:30.
+        if (meta.slots && meta.slots.length) {
+            setChecked(meta.slots);
+        } else {
+            setChecked([]);
+        }
+
+        roomHint.textContent = filled.length
+            ? 'Filled in from the event: ' + filled.join(', ') + '.'
+            : 'Pick the room you need, or use the recommendation below.';
+
+        if (meta.labels && meta.labels.length) {
+            slotHint.textContent = meta.labels.join(' + ')
+                + (meta.labels.length > 1 ? ' — two slots for a longer event, already ticked for you.' : ' — ticked for you.');
+            slotHint.className = 'form-hint mt-2 text-blue-600 font-medium';
         }
     });
 
     dateInput.addEventListener('change', function () {
-        // Reload so the availability grid and slot hints match the new date.
+        // Reload so the slot warnings and required-slot hints match the new date.
         roomRequestForm.submit();
     });
 

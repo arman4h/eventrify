@@ -242,6 +242,74 @@ CREATE TABLE room_requests (
 );
 
 -- ============================================================
+-- 13. DELETED_EVENTS (admin-only archive)
+--     A system admin can remove any event from the platform, but the event
+--     must not simply vanish: the row is copied here first so the record
+--     survives the DELETE that cascades away its registrations, custom form
+--     fields and answers. Only the admin dashboard reads these tables —
+--     nothing in the club or student dashboards, and no public page, ever
+--     queries them.
+--
+--     Every column is a plain copy rather than a foreign key on purpose. A
+--     history row has to keep describing the event even after the club, the
+--     creating user or the students involved are themselves removed, and a
+--     live FK would either block that delete or null the history out.
+-- ============================================================
+CREATE TABLE deleted_events (
+    deleted_event_id      INT AUTO_INCREMENT PRIMARY KEY,
+    event_id              INT NOT NULL,             -- the id it had on `events`
+    club_id               INT,
+    club_name             VARCHAR(100),
+    title                 VARCHAR(150) NOT NULL,
+    description           TEXT,
+    category              VARCHAR(50),
+    poster                LONGTEXT,
+    venue                 VARCHAR(150),
+    start_time            DATETIME NOT NULL,
+    end_time              DATETIME NOT NULL,
+    registration_deadline DATETIME,
+    capacity              INT NOT NULL DEFAULT 0,
+    status                VARCHAR(20) NOT NULL,     -- VARCHAR, not the ENUM: archived
+                                                  -- rows must survive an enum change
+    created_by            INT,
+    created_at            TIMESTAMP NULL,
+    registration_count    INT NOT NULL DEFAULT 0,
+    deleted_by            INT NOT NULL,
+    deleted_by_name       VARCHAR(100),
+    deleted_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    delete_reason         VARCHAR(255),
+    INDEX idx_deleted_events_deleted_at (deleted_at),
+    INDEX idx_deleted_events_event     (event_id)
+);
+
+-- ============================================================
+-- 14. DELETED_EVENT_REGISTRATIONS
+--     Who was on the list when the event was removed, snapshotted with the
+--     name and email on the row. Joining back to `students` would rewrite the
+--     past every time somebody corrected their spelling.
+-- ============================================================
+CREATE TABLE deleted_event_registrations (
+    archive_id        INT AUTO_INCREMENT PRIMARY KEY,
+    deleted_event_id  INT NOT NULL,
+    registration_id   INT,
+    student_id        INT,
+    student_name      VARCHAR(100),
+    university_id     VARCHAR(20),
+    student_email     VARCHAR(100),
+    guest_name        VARCHAR(100),
+    guest_student_id  VARCHAR(20),
+    is_walkin         BOOLEAN NOT NULL DEFAULT FALSE,
+    status            VARCHAR(20) NOT NULL,
+    waitlist_position INT,
+    registered_at     TIMESTAMP NULL,
+    checked_in_at     TIMESTAMP NULL,
+    check_in_method   VARCHAR(10),
+    CONSTRAINT fk_deleted_regs_archive FOREIGN KEY (deleted_event_id)
+        REFERENCES deleted_events(deleted_event_id) ON DELETE CASCADE,
+    INDEX idx_deleted_regs_archive (deleted_event_id)
+);
+
+-- ============================================================
 -- STATIC LOOKUP DATA
 -- ============================================================
 INSERT INTO club_permission_pages (page_key, page_name) VALUES

@@ -47,3 +47,20 @@ function dbExec(mysqli_stmt $stmt): bool
         return false;
     }
 }
+
+/**
+ * Turn a database failure into something worth showing a user.
+ *
+ * Error 2006/2013 means the server closed the connection — usually because a
+ * packet exceeded max_allowed_packet, or the server restarted. Nothing was
+ * written, and any query that follows on the same handle will fail too, so the
+ * page must not keep going as if the save worked.
+ */
+function dbErrorMessage(mysqli_sql_exception $e, string $fallback): string
+{
+    if ($e->getCode() === 2006 || $e->getCode() === 2013) {
+        return 'The database connection was dropped, so nothing was saved. Please try again.';
+    }
+
+    return $fallback;
+}

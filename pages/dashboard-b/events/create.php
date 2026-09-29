@@ -26,26 +26,13 @@ if (isPost()) {
     $date = post('date');
     $startTime = post('start_time');
     $endTime = post('end_time');
+    $endDate = post('end_date');
     $venue = post('venue');
     $capacity = (int) post('capacity', 0);
     $registrationDeadline = post('registration_deadline');
     $status = post('status', 'draft');
-    $poster = '';
-
-    if (isset($_FILES['poster']) && $_FILES['poster']['error'] === UPLOAD_ERR_OK) {
-        $tmpPath = $_FILES['poster']['tmp_name'];
-        $mime = mime_content_type($tmpPath);
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        $size = (int) $_FILES['poster']['size'];
-
-        if (!in_array($mime, $allowedMimes, true)) {
-            $errors[] = 'Poster must be a JPG, PNG, WebP, or GIF image.';
-        } elseif ($size > 5 * 1024 * 1024) {
-            $errors[] = 'Poster image must be 5MB or smaller.';
-        } else {
-            $poster = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($tmpPath));
-        }
-    }
+    [$poster, $posterError] = readImageUpload($_FILES['poster'] ?? null, 'Poster');
+    vAdd($errors, $posterError);
 
     $allowed = ['draft', 'published', 'cancelled', 'completed'];
     if (!in_array($status, $allowed, true)) {
@@ -53,10 +40,16 @@ if (isPost()) {
     }
 
     $startDateTime = ($date !== '' && $startTime !== '') ? "$date $startTime:00" : '';
-    $endDateTime = ($date !== '' && $endTime !== '') ? "$date $endTime:00" : '';
+    // An end date is only needed for an event that finishes after midnight, so it
+    // falls back to the event date.
+    $endDay = ($endDate !== '' ? $endDate : $date);
+    $endDateTime = ($endDay !== '' && $endTime !== '') ? "$endDay $endTime:00" : '';
 
     if ($title === '' || $venue === '' || $startDateTime === '') {
         $errors[] = 'Title, venue, and start time are required.';
+    }
+    if ($startDateTime !== '' && $endDateTime === '') {
+        $errors[] = 'End time is required.';
     }
 
     // Match the column widths so oversized input is refused up front instead of
@@ -74,8 +67,8 @@ if (isPost()) {
         $errors[] = 'Event start date/time cannot be in the past.';
     }
 
-    if ($startTs !== false && $endTs !== false && $endTs < $startTs) {
-        $errors[] = 'End time cannot be before the start time.';
+    if ($startTs !== false && $endTs !== false && $endTs <= $startTs) {
+        $errors[] = 'End time must be after the start time.';
     }
 
     if ($deadlineRaw !== '') {
@@ -84,8 +77,8 @@ if (isPost()) {
             $errors[] = 'Registration deadline is not a valid date.';
         } elseif ($deadlineTs < time()) {
             $errors[] = 'Registration deadline cannot be in the past.';
-        } elseif ($startTs !== false && $deadlineTs > $startTs) {
-            $errors[] = 'Registration deadline cannot be after the event start date.';
+        } elseif ($startTs !== false && $deadlineTs >= $startTs) {
+            $errors[] = 'Registration deadline must be before the event start date and time.';
         }
     }
 
@@ -114,8 +107,12 @@ if (isPost()) {
             $_SESSION['flash']['success'] = 'Event created successfully.';
             redirect('/club/events');
         } catch (mysqli_sql_exception $e) {
+            // A dropped connection (2006) is unrecoverable on this handle, so
+            // sending the user back is the only way to stop every later query
+            // in this request from failing with a fatal 500.
             error_log('Event insert failed: ' . $e->getMessage());
-            $errors[] = 'Failed to create event.';
+            flash('error', dbErrorMessage($e, 'Failed to create event. Please try again.'));
+            redirect('/club/events/create');
         }
     }
 }
@@ -138,6 +135,15 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <p class="page-subtitle">Set up a new club event</p>
             </div>
         </div>
+
+        <?php
+        $flashError = flash('error');
+        if ($flashError !== null) {
+            $alertType = 'error';
+            $alertMessage = $flashError;
+            require BASE_PATH . '/app/components/alert.php';
+        }
+        ?>
 
         <?php foreach ($errors as $error): ?>
             <?php
@@ -204,7 +210,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     <div class="form-group">
                         <label class="label">Event Poster</label>
                         <input type="file" name="poster" accept="image/*" class="input">
-                        <p class="form-hint">Optional. Accepted formats: JPG, PNG, GIF, WEBP (max 5MB).</p>
+                        <p class="form-hint">Optional. Accepted formats: JPG, PNG, GIF, WEBP (max <?= e(formatBytes(imageUploadLimitBytes())) ?>).</p>
                     </div>
                 </div>
             </section>
@@ -223,8 +229,14 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                         <input type="time" name="start_time" class="input" value="<?= e(post('start_time')) ?>" required>
                     </div>
                     <div class="form-group">
-                        <label class="label">End Time</label>
-                        <input type="time" name="end_time" class="input" value="<?= e(post('end_time')) ?>">
+                        <label class="label-required">End Time</label>
+                        <input type="time" name="end_time" class="input" value="<?= e(post('end_time')) ?>" required>
+                        <p class="form-hint">The event must end after it starts.</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="label">End Date</label>
+                        <input type="date" name="end_date" class="input" value="<?= e(post('end_date')) ?>">
+                        <p class="form-hint">Only change this when the event finishes after midnight, such as a two-day event.</p>
                     </div>
                     <div class="form-group">
                         <label class="label">Registration Deadline</label>
@@ -388,9 +400,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var dateInput = document.querySelector('input[name="date"]');
     var startInput = document.querySelector('input[name="start_time"]');
     var deadlineInput = document.querySelector('input[name="registration_deadline"]');
+    var endDateInput = document.querySelector('input[name="end_date"]');
     function updateDeadlineMax() {
         if (dateInput && startInput && deadlineInput && dateInput.value && startInput.value) {
             deadlineInput.max = dateInput.value + 'T' + startInput.value;
+        }
+        if (dateInput && endDateInput) {
+            endDateInput.min = dateInput.value;
         }
     }
     if (dateInput) dateInput.addEventListener('change', updateDeadlineMax);
