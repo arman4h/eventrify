@@ -1,5 +1,32 @@
 <?php
 
+// ── Static file passthrough ───────────────────────────────────────────
+// Started as `php -S localhost:8000 -t public public/index.php`, PHP's
+// built-in server routes *every* request through this file, including
+// requests for files that really do exist under public/ (the stylesheet, the
+// script, club logos). Returning false tells the server to serve the file
+// itself, which is both correct and much faster.
+//
+// Must run before app.php: booting the app here would open a database
+// connection and start a session for every asset request.
+//
+// Only files inside public/ are eligible, and .php is always excluded so an
+// unrouted PHP file in the document root can never be executed directly.
+if (PHP_SAPI === 'cli-server') {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $requestPath = is_string($requestPath) ? rawurldecode($requestPath) : '/';
+
+    if ($requestPath !== '/' && !str_contains($requestPath, "\0")) {
+        $candidate = realpath(__DIR__ . '/' . ltrim($requestPath, '/'));
+        $insideDocRoot = $candidate !== false
+            && str_starts_with($candidate, __DIR__ . DIRECTORY_SEPARATOR);
+
+        if ($insideDocRoot && is_file($candidate) && !str_ends_with(strtolower($candidate), '.php')) {
+            return false;
+        }
+    }
+}
+
 require_once __DIR__ . '/../app/config/app.php';
 require_once BASE_PATH . '/app/helpers/functions.php';
 
@@ -13,6 +40,7 @@ $routes = [
     'events'                         => '/pages/landing/explore.php',
     'event'                          => '/pages/landing/event.php',
     'about'                          => '/pages/landing/about.php',
+    'help'                           => '/pages/landing/help.php',
 
     // ── Auth (students) ───────────────────────
     'login'                          => '/pages/auth/login.php',
@@ -32,6 +60,8 @@ $routes = [
     'student/profile'                => '/pages/dashboard-s/profile.php',
     'student/profile/edit'           => '/pages/dashboard-s/edit-profile.php',
     'student/registrations'          => '/pages/dashboard-s/registrations.php',
+    'student/reports'               => '/pages/dashboard-s/reports.php',
+    'student/report'                => '/pages/dashboard-s/report.php',
 
     // ── Admin dashboard ───────────────────────
     'admin'                          => '/pages/dashboard-a/index.php',
@@ -62,6 +92,9 @@ $routes = [
 ];
 
 if (array_key_exists($uri, $routes)) {
+    // Every state-changing request must carry this session's CSRF token.
+    verifyCsrf();
+
     // Guard admin dashboard routes: must be a logged-in system admin
     $isAdminRoute = str_starts_with($uri, 'admin') && $uri !== 'admin/login';
     if ($isAdminRoute && !isSystemAdmin()) {
@@ -70,5 +103,5 @@ if (array_key_exists($uri, $routes)) {
 
     require BASE_PATH . $routes[$uri];
 } else {
-    redirect('/');
+    require BASE_PATH . '/pages/landing/not-found.php';
 }

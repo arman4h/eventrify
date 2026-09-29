@@ -1,271 +1,279 @@
 # Eventrify
 
-An **event management platform** for university clubs — a DBMS Lab Project made with **PHP + MySQL + Tailwind CSS**.
+An **event management platform for university clubs** — a DBMS lab project built with
+**PHP 8 (procedural) + MySQL/MariaDB + Tailwind CSS**.
 
-How it works:
-
-- Visitors land on a **public events page** (`/`) — they can browse and search upcoming events **without logging in**
-- Each event has a **public detail page** (`/event?id=1`)
-- A **Login** button in the header takes visitors to the student login page
-- Once logged in you get one of **two dashboards**:
-  - **Admin Dashboard** — manage users, see reports & analytics
-  - **Club Dashboard** — create events, track tasks, view overview
+Eventrify lets students discover and register for club events, gives clubs a dashboard to
+publish events and run attendance, and gives the system administrator one place to approve
+clubs, review room bookings, and resolve student reports.
 
 ---
 
-## What you need on your PC
+## Contents
 
-| Tool | What it's for |
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Database](#database)
+- [Demo accounts](#demo-accounts)
+- [Roles and permissions](#roles-and-permissions)
+- [Routes](#routes)
+- [Project layout](#project-layout)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Features
+
+### Public
+
+- Landing page with live statistics and the next events to start
+- Event explorer with search and filtering
+- Public event detail page with a **custom registration form** built by the club
+- Registration works signed in (linked to a student) or as a guest
+
+### Student
+
+- Register, log in, edit profile
+- Browse and register for events
+- Personal registration history with check-in status
+- File a report against a specific event or club, with an admin reply thread
+
+### Club
+
+- Request club access; the dashboard unlocks once an admin approves the club
+- Create and edit events, with a drag-free registration-question builder
+- Custom registration fields per event (text, email, dropdown, and more)
+- Registration management: cancel, waitlist, promote
+- Attendance: search by student ID, check in, and walk-in registration
+- **Room booking** with a live availability grid, conflict detection, and a room recommender
+- Manage club members, and set per-page `view` / `manage` permissions for executives
+- Club settings (name, university, type, established year, description, contact links, logo URL)
+
+### System admin
+
+- Approve or reject club registration requests
+- Overview of all clubs, events, and users
+- Batch approve / decline room requests
+- Read and reply to student reports, with a status workflow
+- Edit the administrator's own name, email, and password
+
+---
+
+## Tech stack
+
+| Layer | Choice |
 |---|---|
-| **XAMPP** | Apache (serves phpMyAdmin) + MySQL (the database) — run both |
-| **PHP 8+** | Runs the website via its own command |
-| **Node.js + npm** | Installs and builds **Tailwind CSS** (required — the site's styling) |
+| Language | PHP 8 (procedural, no framework) |
+| Database | MySQL 8 / MariaDB via `mysqli` (prepared statements throughout) |
+| Templating | Plain PHP includes |
+| CSS | Tailwind CSS 3, compiled to a single static file |
+| Auth | Session cookies, `password_hash` / `password_verify` (bcrypt) |
+
+There is no JavaScript framework and no build step for the PHP code — only Tailwind is compiled.
 
 ---
 
-## Setup Guide
+## Requirements
 
-> You will run **Apache and MySQL normally** from XAMPP (Apache is used for phpMyAdmin), and separately run the PHP project **with its own command on a different port** — so they never conflict. If you use a separately installed PHP and it shows errors about `mysqli`, jump to the [Troubleshooting](#troubleshooting) section at the bottom.
+| Tool | Why |
+|---|---|
+| PHP 8.0+ with the `mysqli` extension | Runs the app and talks to MySQL |
+| MySQL 8.0+ or MariaDB 10.4+ | The database |
+| Node.js + npm | Only to install and build Tailwind CSS |
 
-### Step 1 — Put the project on your computer
-
-Download / clone the repository anywhere you like and open the folder.
-
-> Do **not** put it inside `C:\xampp\htdocs\eventrify` / `htdocs` — you will run the project with your own PHP command instead, so it works from any folder.
-
----
-
-### Step 2 — Install Tailwind CSS (must do before running)
-
-The project uses **Tailwind CSS** for all styling. You need to install its packages and build the CSS file **before** starting the site.
-
-1. Make sure **Node.js** is installed:
-   - Windows / Linux / macOS: check in a terminal with:
-     ```bash
-     node --version
-     npm --version
-     ```
-   - If it says "command not found", download Node.js from <https://nodejs.org> (the LTS version), install it, and re-open your terminal.
-
-2. From the **project folder**, install the Tailwind packages:
-   ```bash
-   npm install
-   ```
-   (Windows / Linux / macOS — same command.)
-
-3. Build the CSS file once:
-   ```bash
-   npm run build
-   ```
-   This creates `public/assets/css/app.css` from `src/css/app.css`.
-
-4. Verify the file exists:
-   - Look for `public/assets/css/app.css` in the project — if it's there, Tailwind is ready.
-
+> The `mbstring` extension is **not** required — the code uses its own `strLength()` helper.
 
 ---
 
-### Step 3 — Start Apache and MySQL
+## Setup
 
-GUI way (recommended):
+### 1. Get the code
 
-1. Open the **XAMPP Control Panel**.
-2. Press the **Start** button on the **Apache** row and on the **MySQL** row (both turn green).
-3. Leave both running.
+Clone or download the repository. Do **not** put it inside `htdocs`; you will run it with
+PHP's own server on its own port.
 
-> **Apache** is needed so that **phpMyAdmin** works (the SQL dashboard). **MySQL** is the database the project connects to.
-
----
-
-### Step 4 — Create the database
-
-GUI way (recommended):
-
-1. Click the **Admin** button next to the MySQL row in XAMPP → this opens **phpMyAdmin** in your browser (requires Apache to be running).
-2. Near the top, click the **Import** tab.
-3. Press **Choose File**, pick **`database/database.sql`** from the project folder.
-4. Press the blue **Import** button at the bottom.
-5. Do the **same again** with **`database/seed.sql`**.
-
-That's it — the database **`eventrify`** with tables and sample data is now created.
-
-> Terminal way (if you prefer - ):
->
-> **Windows** (PowerShell, from the project folder):
-> ```powershell
-> mysql -u root < database/database.sql
-> mysql -u root < database/seed.sql
-> ```
->
-> **Linux/macOS** (from the project folder). On Linux, if `mysql` isn't on your PATH, use XAMPP's copy:
-> ```bash
-> mysql -u root < database/database.sql
-> mysql -u root < database/seed.sql
-> # or, using XAMPP's mysql:
-> /opt/lampp/xampp startmysql
-> /opt/lampp/bin/mysql -u root < database/database.sql
-> /opt/lampp/bin/mysql -u root < database/seed.sql
-> ```
-
----
-
-### Step 5 — Create the `.env` file
-
-The project needs a small config file. Look for **`.env.example`** in the project folder:
-
-1. Make a copy of it and name the copy **`.env`**.
-   - **Windows (GUI):** right-click `.env.example` → **Copy**, right-click empty space → **Paste**, then right-click the pasted file → **Rename** → type `.env`
-   - **Windows (terminal):** `copy .env.example .env`
-   - **Linux/macOS (GUI):** press `Ctrl+H` (Linux) or `Cmd+Shift+.` (macOS) to show hidden files, right-click the file → **Copy** → **Paste**, then rename it to `.env`
-   - **Linux/macOS (terminal):** `cp .env.example .env`
-2. Open `.env` in a text editor. For **XAMPP** it should already be:
+### 2. Build the CSS
 
 ```bash
+npm install
+npm run build      # writes public/assets/css/app.css
+```
+
+While working on styles, use `npm run dev` to rebuild on save.
+
+### 3. Configure the database
+
+Copy `.env.example` to `.env` and edit it:
+
+```ini
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=eventrify
 DB_USER=root
 DB_PASSWORD=
+
+APP_NAME=Eventrify
 APP_URL=http://localhost:8000
+APP_ENV=development
 ```
 
-> Just leave it as-is. These are XAMPP's default values (user `root`, no password). Only change `DB_PASSWORD` if your MySQL has a password.
+### 4. Create and seed the database
 
----
+`database/finalschema.sql` is the single source of truth: it creates every table, the
+foreign keys, the indexes, and the demo data.
 
-### Step 6 — Run the website
-
-Open a terminal (Command Prompt / PowerShell on Windows) **inside the project folder** and run:
-
-**Windows** (if `php` works on your PATH):
-```powershell
-php -S localhost:8000 -t public
-```
-**Windows** (using XAMPP's PHP directly, most reliable):
-```powershell
-C:\xampp\php\php.exe -S localhost:8000 -t public
+```bash
+mysql -u root -p -e "CREATE DATABASE eventrify CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p eventrify < database/finalschema.sql
 ```
 
-**Linux/macOS** (if `php` works on your PATH):
+### 5. Run it
+
 ```bash
 php -S localhost:8000 -t public
 ```
-**Linux** (using XAMPP's PHP directly, most reliable):
-```bash
-/opt/lampp/bin/php -S localhost:8000 -t public
-```
 
-Then open your browser and go to:
-
-```
-http://localhost:8000
-```
-
-You should see the **public events landing page**. 🎉
-
-> Tip: keep this terminal open — that **is** your website server. Press `Ctrl+C` to stop it.
->
-> This runs **alongside Apache** which stays on port 80 — so at the same time you can open phpMyAdmin at `http://localhost/phpmyadmin` and the project at `http://localhost:8000` without any conflict.
+Open <http://localhost:8000>.
 
 ---
 
-## Demo Accounts
+## Database
 
-| Role | Email | Password | Logs you into |
-|---|---|---|---|
-| Admin | `admin@eventrify.com` | `admin123` | Admin Dashboard |
-| Club Admin | `club@eventrify.com` | `club123` | Club Dashboard |
-| User | `john@example.com` | `user123` | Club Dashboard |
+`database/finalschema.sql` contains:
 
-Or create a fresh account at the **Register** page.
+- **Schema** — 12 tables with foreign keys and indexes
+- **Seed data** — students, clubs, club users, events, registrations, registration fields,
+  room requests, reports, permission pages, and one system administrator
 
----
+Tables:
 
-## Pages / URLs
-
-| URL | What it is |
+| Table | Holds |
 |---|---|
-| `/` | Public landing page — explore & search all events |
-| `/event?id=1` | Public event detail page |
-| `/login`, `/register` | Sign in / create account |
-| `/admin` | Admin dashboard |
-| `/admin/users` (+ create/edit) | Manage users |
-| `/admin/reports` | Reports & analytics |
-| `/admin/settings` | Platform settings |
-| `/club` | Club dashboard overview |
-| `/club/events` (+ create/edit) | Manage events |
-| `/club/tasks` | Task list |
-| `/club/settings` | Workspace settings |
+| `students` | Student accounts and profiles |
+| `clubs` | Club records, public contact details, approval status |
+| `club_users` | Club members — owner, admin, or executive |
+| `club_permission_pages` | The dashboard sections a club can grant access to |
+| `executive_permissions` | Per-executive, per-section `view` / `manage` grant |
+| `events` | Events, including venue, schedule, capacity, and lifecycle status |
+| `event_registration_fields` | Custom registration questions per event |
+| `event_registrations` | Who registered, waitlist position, and check-in state |
+| `registration_field_responses` | A participant's answers to the custom questions |
+| `room_requests` | One row **per booked slot** |
+| `reports` | Student reports and the admin's replies |
+| `system_admins` | System administrator accounts |
+
+### Room requests are slot-based
+
+The campus day is divided into six fixed slots. A booking is one or two *adjacent* slots, and
+each slot is stored as its own `room_requests` row that shares the same `created_at` value —
+that shared timestamp is what groups the rows back into one booking. A slot held by a
+`pending` or `approved` request from **another** club blocks that room; a request from your
+own club does not block you.
 
 ---
 
-## Project Structure (short version)
+## Demo accounts
 
-```text
-eventrify/
-├── public/          # what the browser can access (start here)
-│   └── index.php    # tiny router → loads pages
-├── app/             # application code
-│   ├── config/      # app.php, database.php, .env loader
-│   ├── helpers/     # auth, redirect, small functions
-│   ├── layouts/     # dashboard-a + dashboard-b + landing (header/sidebar/navbar/footer)
-│   └── components/  # reusable UI (table, alert, modal, pagination, button)
-├── pages/           # each page's logic
-│   ├── landing/     # public pages (event listing, event detail)
-│   ├── auth/        # login, register, logout
-│   ├── dashboard-a/ # admin pages
-│   └── dashboard-b/ # club pages
-├── src/css/         # Tailwind source CSS (input — builds public/assets/css/app.css)
-├── database/        # database.sql + seed.sql
-└── .env             # your local settings (don't share this file)
+| Role | Email | Password |
+|---|---|---|
+| Student | `arman4hn@gmail.com` | `arman123` |
+| Club owner | `mahi@gmail.com` | `mahi123` |
+| System admin | `admin@eventrify.com` | `admin123` |
+
+Sign-in pages: `/login`, `/club/login`, `/admin/login`.
+
+---
+
+## Roles and permissions
+
+**System admin** — full access to every admin page.
+
+**Club owner / admin** — full access to their own club's dashboard.
+
+**Club executive** — access is granted per dashboard section, at one of two levels:
+
+- `view` — can open the section, but every write is refused server-side, not just hidden
+- `manage` — can make changes
+
+An executive with `access_scope = 'limited'` is restricted to their explicit grants. A club
+owner or admin always has `manage` everywhere.
+
+Both levels are enforced twice on purpose: the buttons are hidden in the UI, **and**
+`requireClubManage()` re-checks the level at the top of every POST handler so a hand-crafted
+request cannot bypass it.
+
+---
+
+## Routes
+
+**Public**
+
+| Path | Page |
+|---|---|
+| `/` | Landing |
+| `/events` | Event explorer |
+| `/event?event_id=2` | Event detail and registration |
+| `/about`, `/help` | Static pages |
+
+**Auth** — `/login`, `/register-student`, `/logout`, `/club/login`, `/club/register`,
+`/club/access-request`, `/admin/login`
+
+**Student** — `/student`, `/student/profile`, `/student/profile/edit`,
+`/student/registrations`, `/student/reports`, `/student/report`
+
+**Club** — `/club`, `/club/events`, `/club/events/create`, `/club/events/edit`,
+`/club/events/manage`, `/club/events/delete`, `/club/registrations`, `/club/attendance`,
+`/club/attendance/walkin`, `/club/members`, `/club/room-requests`, `/club/reports`,
+`/club/settings`
+
+**Admin** — `/admin`, `/admin/club-requests`, `/admin/club-requests/review?club_id=1`,
+`/admin/clubs`, `/admin/events`, `/admin/events/delete`, `/admin/users`,
+`/admin/room-requests`, `/admin/reports`, `/admin/settings`
+
+Unknown paths render the 404 page.
+
+---
+
+## Project layout
+
 ```
+app/
+  config/       app bootstrap, .env loader, database connection
+  helpers/      auth, security, validation, rooms, reporting, shared functions
+  layouts/      landing, dashboard-s, dashboard-a, dashboard-b shells
+  components/   reusable markup (alerts, and similar)
+  views/
+database/
+  finalschema.sql   the authoritative schema + seed data
+pages/          one directory per dashboard, mirroring the routes
+public/         document root; index.php is the router, assets/ is served from here
+src/css/        Tailwind source, compiled into public/assets/css/app.css
+docs/           progress reports
+```
+
+### Security notes
+
+- Every state-changing request is verified against the session CSRF token in `public/index.php`
+- All SQL goes through prepared statements with explicit bind types
+- Passwords are bcrypt hashes; sessions are regenerated on login
+- Output is escaped through the `e()` helper
+- Failed logins are throttled and reported with HTTP 419
+- `execOk()` / `dbExec()` convert database failures into user-facing messages instead of 500s
 
 ---
 
 ## Troubleshooting
 
-**"mysqli PHP extension is not enabled"**
+**"The mysqli PHP extension is not enabled"** — enable `extension=mysqli` in your `php.ini`,
+then restart the server.
 
-You are using a PHP that doesn't have MySQL support. Fixes:
+**"Can't connect to MySQL"** — start MySQL, then check `DB_HOST`, `DB_PORT`, `DB_USER`, and
+`DB_PASSWORD` in `.env`.
 
-- **Easiest — use XAMPP's PHP.** Run the site with:
-  - Windows: `C:\xampp\php\php.exe -S localhost:8000 -t public`
-  - Linux: `/opt/lampp/bin/php -S localhost:8000 -t public`
-- **Or install MySQL support for your system PHP:**
-  - Linux (Ubuntu/Debian):
-    ```bash
-    sudo apt install php8.3-mysql
-    ```
-  - Windows: open your PHP folder, find `php.ini`, remove the `;` in front of `extension=mysqli`, save, and restart the server.
-  - macOS (Homebrew): `brew install php-mysql` or `brew reinstall php`
+**The page has no styling** — run `npm install && npm run build`.
 
-**"No such file or directory" when connecting**
+**"Unknown database"** — create it and import `database/finalschema.sql`.
 
-MySQL couldn't be reached over the missing Unix socket (common on Linux when mixing XAMPP MySQL with system PHP). Fix: use `DB_HOST=127.0.0.1` in `.env` (already the default) and make sure **MySQL is started** in XAMPP.
-
-**"Database connection failed"**
-
-`.env` values are wrong, or XAMPP MySQL isn't running. Open XAMPP → press **Start** on MySQL, double-check `DB_USER` / `DB_PASSWORD`.
-
-**White page / no styling / "npm not found"**
-
-Tailwind wasn't installed/built yet. From the project folder run `npm install`, then `npm run build` to generate `public/assets/css/app.css`, and restart the `php -S` server. If `npm` is missing, install Node.js first (see Step 2).
-
-**Port 8000 already in use**
-
-Use another port and update `APP_URL`:
-- Windows / Linux: `php -S localhost:8080 -t public`
-- For XAMPP's PHP on Windows: `C:\xampp\php\php.exe -S localhost:8080 -t public`
-- For XAMPP's PHP on Linux: `/opt/lampp/bin/php -S localhost:8080 -t public`
-
-Then set `APP_URL=http://localhost:8080` in `.env`.
-
----
-
-## Skills you'll practice
-
-- PHP + MySQL CRUD (create, read, update, delete)
-- HTML / CSS / Tailwind UI
-- Login & registration with sessions
-- Two dashboard designs in one project
-- Database design with foreign keys (users, events, registrations, tasks)
+**Port 8000 already in use** — run `php -S localhost:8080 -t public` and set `APP_URL` to match.

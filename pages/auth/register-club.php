@@ -38,32 +38,39 @@ if (isPost()) {
         $errors[] = 'Please fill in all required fields.';
     }
 
-    if (!filter_var($clubEmail, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please enter a valid official club email address.';
+    // Match the column widths so oversized input is refused up front instead of
+    // failing later as a "Data too long" error inside the transaction.
+    foreach ([
+        'Club name'            => [$clubName, 100],
+        'University'           => [$universityName, 150],
+        'Club type'            => [$clubType, 50],
+        'Official email'       => [$clubEmail, 100],
+        'Website'              => [$website, 255],
+        'Facebook page'        => [$facebook, 255],
+        'Social links'         => [$social, 255],
+        'Applicant name'       => [$applicantName, 100],
+        'Student ID'           => [$studentId, 20],
+        'Position'             => [$position, 50],
+        'Applicant email'      => [$applicantEmail, 100],
+        'Phone number'         => [$phone, 20],
+    ] as $label => [$value, $max]) {
+        vAdd($errors, vMaxLen($value, $max, $label));
     }
 
-    if (!filter_var($applicantEmail, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please enter a valid university email address.';
-    }
+    vAdd($errors, vEmail($clubEmail, 'club email'));
+    vAdd($errors, vEmail($applicantEmail, 'university email'));
+    vAdd($errors, vPhone($phone));
+    vAdd($errors, vUrl($website, 'Website'));
+    vAdd($errors, vUrl($facebook, 'Facebook page'));
+    vAdd($errors, vPassword($password));
+    vAdd($errors, vPasswordNotSimilar($password, [$applicantName, $applicantEmail, $studentId]));
 
-    if (strlen($password) < 8) {
-        $errors[] = 'Password must be at least 8 characters long.';
-    }
-
-    if ($password !== $passwordConfirm) {
+    if ($password !== '' && $password !== $passwordConfirm) {
         $errors[] = 'Passwords do not match.';
     }
 
     if ($established !== null && ($established < 1990 || $established > (int) date('Y'))) {
         $errors[] = 'Please enter a valid established year.';
-    }
-
-    if ($website !== '' && !filter_var($website, FILTER_VALIDATE_URL)) {
-        $errors[] = 'Please enter a valid website URL.';
-    }
-
-    if ($facebook !== '' && !filter_var($facebook, FILTER_VALIDATE_URL)) {
-        $errors[] = 'Please enter a valid Facebook page URL.';
     }
 
     if (!$declaration) {
@@ -190,6 +197,7 @@ $pageTitle = 'Request Club Access';
                 <?php endforeach; ?>
 
                 <form method="POST" action="<?= url('/club/register') ?>" enctype="multipart/form-data" class="space-y-5">
+                    <?= csrfField() ?>
                     <div>
                         <h2 class="text-base font-semibold text-gray-900">Club Information</h2>
                         <div class="separator mt-3 mb-5"></div>
@@ -197,12 +205,12 @@ $pageTitle = 'Request Club Access';
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label for="club_name" class="label label-required">Club Name</label>
-                                <input type="text" id="club_name" name="club_name" class="input" placeholder="e.g. Programming Club" value="<?= e(post('club_name')) ?>" required>
+                                <input type="text" id="club_name" name="club_name" class="input" placeholder="e.g. Programming Club" value="<?= e(post('club_name')) ?>" maxlength="100" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="university" class="label label-required">University</label>
-                                <input type="text" id="university" name="university" class="input" placeholder="United International University" value="<?= e(post('university') !== '' ? post('university') : 'United International University') ?>" required>
+                                <input type="text" id="university" name="university" class="input" placeholder="<?= e(universityName()) ?>" value="<?= e(post('university')) ?>" maxlength="150" required>
                             </div>
 
                             <div class="form-group">
@@ -243,22 +251,22 @@ $pageTitle = 'Request Club Access';
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label for="official_email" class="label label-required">Official Club Email</label>
-                                <input type="email" id="official_email" name="official_email" class="input" placeholder="club@university.edu" value="<?= e(post('official_email')) ?>" required>
+                                <input type="email" id="official_email" name="official_email" class="input" placeholder="club@university.edu" value="<?= e(post('official_email')) ?>" maxlength="100" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="website" class="label">Website</label>
-                                <input type="url" id="website" name="website" class="input" placeholder="https://" value="<?= e(post('website')) ?>">
+                                <input type="url" id="website" name="website" class="input" placeholder="https://" value="<?= e(post('website')) ?>" maxlength="255">
                             </div>
 
                             <div class="form-group">
                                 <label for="facebook" class="label">Facebook Page</label>
-                                <input type="url" id="facebook" name="facebook" class="input" placeholder="https://facebook.com/yourclub" value="<?= e(post('facebook')) ?>">
+                                <input type="url" id="facebook" name="facebook" class="input" placeholder="https://facebook.com/yourclub" value="<?= e(post('facebook')) ?>" maxlength="255">
                             </div>
 
                             <div class="form-group">
                                 <label for="social_links" class="label">Other Social Links</label>
-                                <input type="text" id="social_links" name="social_links" class="input" placeholder="Instagram, LinkedIn, etc." value="<?= e(post('social_links')) ?>">
+                                <input type="text" id="social_links" name="social_links" class="input" placeholder="Instagram, LinkedIn, etc." value="<?= e(post('social_links')) ?>" maxlength="255">
                             </div>
                         </div>
                     </div>
@@ -270,27 +278,27 @@ $pageTitle = 'Request Club Access';
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label for="applicant_name" class="label label-required">Applicant Name</label>
-                                <input type="text" id="applicant_name" name="applicant_name" class="input" placeholder="John Doe" value="<?= e(post('applicant_name')) ?>" required>
+                                <input type="text" id="applicant_name" name="applicant_name" class="input" placeholder="John Doe" value="<?= e(post('applicant_name')) ?>" maxlength="100" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="student_id" class="label label-required">Student ID</label>
-                                <input type="text" id="student_id" name="student_id" class="input" placeholder="e.g. 0112211234" value="<?= e(post('student_id')) ?>" required>
+                                <input type="text" id="student_id" name="student_id" class="input" placeholder="e.g. 0112211234" value="<?= e(post('student_id')) ?>" maxlength="20" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="position" class="label label-required">Position</label>
-                                <input type="text" id="position" name="position" class="input" placeholder="e.g. President" value="<?= e(post('position')) ?>" required>
+                                <input type="text" id="position" name="position" class="input" placeholder="e.g. President" value="<?= e(post('position')) ?>" maxlength="50" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="applicant_email" class="label label-required">University Email</label>
-                                <input type="email" id="applicant_email" name="applicant_email" class="input" placeholder="your.name@university.edu" value="<?= e(post('applicant_email')) ?>" required>
+                                <input type="email" id="applicant_email" name="applicant_email" class="input" placeholder="your.name@university.edu" value="<?= e(post('applicant_email')) ?>" maxlength="100" required>
                             </div>
 
                             <div class="form-group">
                                 <label for="phone" class="label label-required">Phone</label>
-                                <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>" required>
+                                <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>" maxlength="20" required>
                             </div>
 
                             <div class="form-group">

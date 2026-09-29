@@ -3,6 +3,10 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/redirect.php';
 require_once __DIR__ . '/icons.php';
+require_once __DIR__ . '/validation.php';
+require_once __DIR__ . '/security.php';
+require_once __DIR__ . '/rooms.php';
+require_once __DIR__ . '/reporting.php';
 
 function e(?string $value): string
 {
@@ -72,9 +76,72 @@ function now(): string
     return date('Y-m-d H:i:s');
 }
 
-function formatDate(string $date, string $format = 'M d, Y'): string
+/**
+ * The institution this deployment serves.
+ *
+ * The schema has no site-wide settings table and the students table has no
+ * university column, so the name is read from the clubs that are registered
+ * here rather than being written into the markup. Returns an em dash when no
+ * club has been registered yet.
+ */
+function universityName(): string
 {
-    return date($format, strtotime($date));
+    static $cached = null;
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $cached = '—';
+    if (isset($GLOBALS['db'])) {
+        $row = $GLOBALS['db']->query("
+            SELECT university FROM clubs
+            WHERE university IS NOT NULL AND TRIM(university) <> ''
+            ORDER BY club_id LIMIT 1
+        ")->fetch_assoc();
+        if ($row && trim((string) $row['university']) !== '') {
+            $cached = trim((string) $row['university']);
+        }
+    }
+
+    return $cached;
+}
+
+/**
+ * Format a database datetime. Nullable columns are common (resolved_at,
+ * reviewed_at, joined events), so a missing value renders as an em dash
+ * instead of raising a TypeError and taking the whole page down with it.
+ */
+function formatDate(?string $date, string $format = 'M d, Y'): string
+{
+    if ($date === null || trim($date) === '') {
+        return '—';
+    }
+
+    $timestamp = strtotime($date);
+    if ($timestamp === false) {
+        return '—';
+    }
+
+    return date($format, $timestamp);
+}
+
+/**
+ * UTF-8 safe character count.
+ *
+ * mbstring is not guaranteed to be installed (it is absent on some shared
+ * hosts), so fall back to a regex match that counts code points instead of
+ * bytes. Without this, validators would either fatal or silently compare
+ * byte lengths, which rejects valid text as "too long" for non-ASCII input.
+ */
+function strLength(string $text): int
+{
+    if (function_exists('mb_strlen')) {
+        return mb_strlen($text, 'UTF-8');
+    }
+
+    $count = preg_match_all('/./us', $text, $matches);
+    return $count === false ? strlen($text) : $count;
 }
 
 function truncate(?string $text, int $width = 50, string $suffix = '…'): string
@@ -147,30 +214,34 @@ function requireApprovedClub(): void
 }
 
 /**
- * Whether the current club user can access a dashboard section.
- * Owners and admins always have full access. Executives with an
- * 'all' access scope have full access; executives with a 'limited'
- * scope may only open pages granted via executive_permissions.
+ * The highest access this club user has for a dashboard section.
+ *
+ * Returns 'manage' (may change data), 'view' (read only) or 'none'.
+ * Owners and admins always get 'manage'; executives with an 'all' access scope
+ * get 'manage'; executives with a 'limited' scope get exactly what
+ * executive_permissions grants, which may be view-only.
  */
-function clubCanAccess(string $pageKey): bool
+function clubAccessLevel(string $pageKey): string
 {
     if (!isClubUser()) {
-        return false;
+        return 'none';
     }
-    $me = currentUser();
+
+    $me   = currentUser();
     $role = $me['role'] ?? '';
+
     if ($role === 'owner' || $role === 'admin') {
-        return true;
+        return 'manage';
     }
     if ($role !== 'executive') {
-        return false;
+        return 'none';
     }
     if (($me['access_scope'] ?? 'all') !== 'limited') {
-        return true;
+        return 'manage';
     }
-    $db = $GLOBALS['db'];
-    $stmt = $db->prepare("
-        SELECT 1
+
+    $stmt = $GLOBALS['db']->prepare("
+        SELECT ep.access_level
         FROM executive_permissions ep
         JOIN club_permission_pages p ON p.page_id = ep.page_id
         WHERE ep.club_user_id = ? AND p.page_key = ?
@@ -178,7 +249,22 @@ function clubCanAccess(string $pageKey): bool
     ");
     $stmt->bind_param('is', $me['id'], $pageKey);
     $stmt->execute();
-    return (bool) $stmt->get_result()->fetch_assoc();
+
+    $level = (string) ($stmt->get_result()->fetch_assoc()['access_level'] ?? '');
+
+    return $level === 'manage' ? 'manage' : ($level === 'view' ? 'view' : 'none');
+}
+
+/** Whether the current club user can open a dashboard section at all. */
+function clubCanAccess(string $pageKey): bool
+{
+    return clubAccessLevel($pageKey) !== 'none';
+}
+
+/** Whether the current club user may change data in a dashboard section. */
+function clubCanManage(string $pageKey): bool
+{
+    return clubAccessLevel($pageKey) === 'manage';
 }
 
 /**
@@ -191,6 +277,34 @@ function requireClubAccess(string $pageKey): void
         $_SESSION['flash']['error'] = 'You do not have access to this section.';
         redirect('/club');
     }
+}
+
+/**
+ * Require 'manage' on a section before any write is accepted.
+ *
+ * Called at the top of each POST handler so a view-only executive is refused
+ * even if they hand-craft the request, not just when the button is hidden.
+ */
+function requireClubManage(string $pageKey): void
+{
+    requireClubAccess($pageKey);
+    if (!clubCanManage($pageKey)) {
+        $_SESSION['flash']['error'] = 'You have view-only access to this section.';
+        redirect(clubPageUrl($pageKey));
+    }
+}
+
+/**
+ * The URL of a club dashboard section, given its permission page key.
+ *
+ * Most keys are the route with underscores turned into dashes, but
+ * `club_profile` lives at /club/settings.
+ */
+function clubPageUrl(string $pageKey): string
+{
+    $routes = ['club_profile' => '/club/settings'];
+
+    return $routes[$pageKey] ?? '/club/' . str_replace('_', '-', $pageKey);
 }
 
 function requireSystemAdmin(): void
@@ -405,34 +519,4 @@ function linkGuestRegistrations(int $studentId, string $email): int
         $linked++;
     }
     return $linked;
-}
-
-/**
- * Fixed room time slots used for room requests.
- */
-function roomTimeSlots(): array
-{
-    return [
-        ['start' => '08:30', 'end' => '09:50', 'label' => '8:30 - 9:50'],
-        ['start' => '09:51', 'end' => '11:10', 'label' => '9:51 - 11:10'],
-        ['start' => '11:11', 'end' => '12:30', 'label' => '11:11 - 12:30'],
-        ['start' => '12:31', 'end' => '13:40', 'label' => '12:31 - 1:40'],
-        ['start' => '13:50', 'end' => '15:10', 'label' => '1:50 - 3:10'],
-        ['start' => '15:11', 'end' => '16:30', 'label' => '3:11 - 4:30'],
-    ];
-}
-
-/**
- * Display label for a room request time slot (falls back to raw times).
- */
-function roomSlotLabel(string $start, string $end): string
-{
-    $s = substr($start, 0, 5);
-    $e = substr($end, 0, 5);
-    foreach (roomTimeSlots() as $slot) {
-        if ($slot['start'] === $s && $slot['end'] === $e) {
-            return $slot['label'];
-        }
-    }
-    return $s . ' - ' . $e;
 }

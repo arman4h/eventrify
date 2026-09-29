@@ -6,7 +6,8 @@ require_once BASE_PATH . '/app/config/database.php';
 $eventId = (int) get('event_id');
 
 $stmt = $db->prepare("
-    SELECT e.*, c.club_name, c.description AS club_description
+    SELECT e.*, c.club_name, c.description AS club_description,
+           c.club_id, c.official_email, c.website, c.facebook
     FROM events e
     JOIN clubs c ON c.club_id = e.club_id
     WHERE e.event_id = ? AND e.status = 'published'
@@ -99,6 +100,9 @@ if (isPost() && post('action') === 'register_event') {
         if ($f['is_required'] && $val === '') {
             $errors[] = $f['field_label'] . ' is required.';
         }
+        // Answers are free text, but bound them so an oversized one cannot
+        // blow up on insert.
+        vAdd($errors, vMaxLen($val, 1000, $f['field_label']));
         $label = strtolower(trim($f['field_label']));
         if ($label === 'full name') $guestName = $val;
         if ($label === 'email') $guestEmail = $val;
@@ -106,6 +110,10 @@ if (isPost() && post('action') === 'register_event') {
         if ($label === 'department') $guestDepartment = $val;
         if (strpos($label, 'phone') === 0) $guestPhone = $val;
     }
+
+    // guest_name and guest_student_id are stored in narrower columns.
+    vAdd($errors, vMaxLen($guestName, 100, 'Name'));
+    vAdd($errors, vMaxLen($guestStudentId, 20, 'Student ID'));
 
     if ($guestEmail !== '' && !filter_var($guestEmail, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please enter a valid email address.';
@@ -195,7 +203,7 @@ if (isPost() && post('action') === 'register_event') {
 
         $stmt->bind_param('iisssi', $bindEventId, $bindStudentId, $bindGuestName, $bindGuestStud, $bindStatus, $bindWaitlistPos);
 
-        if ($stmt->execute()) {
+        if (dbExec($stmt)) {
             $registrationId = (int) $db->insert_id;
 
             $respStmt = $db->prepare("INSERT INTO registration_field_responses (registration_id, field_id, response_value) VALUES (?, ?, ?)");
@@ -203,7 +211,7 @@ if (isPost() && post('action') === 'register_event') {
                 $val = $responses[$f['field_id']] ?? '';
                 if ($val === '') continue;
                 $respStmt->bind_param('iis', $registrationId, $f['field_id'], $val);
-                $respStmt->execute();
+                dbExec($respStmt);
             }
 
             setOld([]);
@@ -260,7 +268,8 @@ if (isStudent()) {
           AND status NOT IN ('cancelled')
         LIMIT 1
     ");
-    $checkReg->bind_param('ii', $eventId, currentUserId());
+    $viewerId = currentUserId();
+    $checkReg->bind_param('ii', $eventId, $viewerId);
     $checkReg->execute();
     $regResult = $checkReg->get_result()->fetch_assoc();
     if ($regResult) {
@@ -414,6 +423,7 @@ require BASE_PATH . '/app/layouts/landing/header.php';
                     <p class="text-xs text-gray-500 mt-3 text-center">Registration for this event has closed.</p>
                 <?php else: ?>
                     <form method="POST" action="<?= url('/event?event_id=' . $eventId) ?>" class="space-y-4">
+                        <?= csrfField() ?>
                         <input type="hidden" name="action" value="register_event">
                         <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
                             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Required Information</p>
@@ -457,6 +467,59 @@ require BASE_PATH . '/app/layouts/landing/header.php';
                 </div>
             </div>
         </div>
+
+        <?php if (!empty($event['official_email'])): ?>
+        <div class="card p-6 border-amber-200 bg-amber-50/40">
+            <div class="flex items-start gap-3">
+                <span class="inline-flex w-10 h-10 rounded-lg bg-amber-100 text-amber-700 items-center justify-center shrink-0">
+                    <?= icon('alert', 'w-5 h-5') ?>
+                </span>
+                <div class="min-w-0 flex-1">
+                    <h3 class="font-semibold text-gray-900">Something wrong with this event?</h3>
+                    <p class="text-sm text-gray-600 mt-1 leading-relaxed">
+                        <?= e($event['club_name']) ?> organises this event, so try them first — most issues are fixed
+                        fastest by the club itself.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-2 mt-4">
+                        <a href="<?= e(reportMailtoLink(
+                            (string) $event['official_email'],
+                            'Eventrify: ' . $event['title'] . ' — query or problem',
+                            "Hello,\n\nI have a question / problem regarding \"" . $event['title'] . "\".\n\n"
+                            . "Details:\n\n\n"
+                            . "My student ID: " . ($studentSession['university_id'] ?? '') . "\n\nThank you."
+                        )) ?>" class="btn-primary btn-sm">
+                            <?= icon('mail', 'w-4 h-4') ?>
+                            Contact the club
+                        </a>
+                        <button type="button" class="btn-secondary btn-sm" data-copy="<?= e($event['official_email']) ?>">
+                            <?= icon('copy', 'w-4 h-4') ?>
+                            Copy email
+                        </button>
+                    </div>
+
+                    <?php if (isStudent()): ?>
+                    <div class="mt-4 pt-4 border-t border-amber-200/70">
+                        <p class="text-sm text-gray-600 leading-relaxed">
+                            Still not sorted after contacting the club? Send it to the <strong class="text-gray-900">system
+                            administrator</strong> and they will step in.
+                        </p>
+                        <a href="<?= url('/student/report?event_id=' . $eventId) ?>" class="btn-danger btn-sm mt-3">
+                            <?= icon('shield', 'w-4 h-4') ?>
+                            Report to administrator
+                        </a>
+                    </div>
+                    <?php else: ?>
+                    <p class="text-xs text-gray-500 mt-4 pt-4 border-t border-amber-200/70">
+                        <?= icon('info', 'w-3.5 h-3.5 inline -mt-0.5') ?>
+                        <a href="<?= url('/login') ?>" class="text-blue-600 hover:underline font-medium">Log in</a>
+                        to escalate an unresolved issue to the system administrator.
+                    </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <div class="card p-6">
             <h3 class="font-semibold text-gray-900 mb-3">Location</h3>

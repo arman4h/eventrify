@@ -5,12 +5,21 @@ require_once BASE_PATH . '/app/config/database.php';
 
 requireClubAccess('events');
 
+// A view-only executive may not open a write form at all.
+if (!clubCanManage('events')) {
+    $_SESSION['flash']['error'] = 'You have view-only access to this section.';
+    redirect('/club');
+}
+
 $pageTitle = 'Create Event';
 $activePage = 'events';
 
 $errors = [];
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('events');
+
     $title = post('title');
     $description = post('description');
     $category = post('category');
@@ -50,6 +59,13 @@ if (isPost()) {
         $errors[] = 'Title, venue, and start time are required.';
     }
 
+    // Match the column widths so oversized input is refused up front instead of
+    // failing later as a "Data too long" error on INSERT.
+    vAdd($errors, vMaxLen($title, 150, 'Title'));
+    vAdd($errors, vMaxLen($category, 50, 'Category'));
+    vAdd($errors, vMaxLen($venue, 150, 'Venue'));
+    vAdd($errors, vInt(post('capacity'), 'Capacity', 0, 1000000));
+
     $startTs = $startDateTime !== '' ? strtotime($startDateTime) : false;
     $endTs = $endDateTime !== '' ? strtotime($endDateTime) : false;
     $deadlineRaw = $registrationDeadline !== '' ? $registrationDeadline : '';
@@ -77,26 +93,28 @@ if (isPost()) {
         $clubId = (int) currentUser()['club_id'];
         $createdBy = currentUserId();
 
-        $stmt = $db->prepare("
-            INSERT INTO events
-                (club_id, title, description, category, poster, venue,
-                 start_time, end_time, registration_deadline, capacity, status, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-
         $end = $endDateTime !== '' ? $endDateTime : null;
         $deadline = $registrationDeadline !== '' ? $registrationDeadline : null;
 
-        $stmt->bind_param('issssssssisi', $clubId, $title, $description, $category, $poster, $venue, $startDateTime, $end, $deadline, $capacity, $status, $createdBy);
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO events
+                    (club_id, title, description, category, poster, venue,
+                     start_time, end_time, registration_deadline, capacity, status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
 
-        if ($stmt->execute()) {
+            $stmt->bind_param('issssssssisi', $clubId, $title, $description, $category, $poster, $venue, $startDateTime, $end, $deadline, $capacity, $status, $createdBy);
+
+            $stmt->execute();
             $newEventId = $stmt->insert_id;
 
             insertRegistrationFields($db, $newEventId, $_POST['questions'] ?? []);
 
             $_SESSION['flash']['success'] = 'Event created successfully.';
             redirect('/club/events');
-        } else {
+        } catch (mysqli_sql_exception $e) {
+            error_log('Event insert failed: ' . $e->getMessage());
             $errors[] = 'Failed to create event.';
         }
     }
@@ -162,6 +180,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
         </ol>
 
         <form method="POST" enctype="multipart/form-data" class="card p-6 sm:p-8 space-y-8">
+<?= csrfField() ?>
             <section>
                 <h3 class="text-base font-semibold text-gray-900 mb-4">Basic Information</h3>
                 <div class="space-y-4">

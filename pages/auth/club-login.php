@@ -17,25 +17,41 @@ if (isPost()) {
     $email    = post('email');
     $password = post('password');
 
-    if ($email === '' || $password === '') {
-        $error = 'Please fill in all fields.';
-    } else {
-        $stmt = $db->prepare("SELECT cu.*, c.status AS club_status FROM club_users cu JOIN clubs c ON c.club_id = cu.club_id WHERE cu.email = ? LIMIT 1");
-        $stmt->bind_param('s', $email);
-        $stmt->execute();
-        $cu = $stmt->get_result()->fetch_assoc();
+    $loginErrors = [];
+    vAdd($loginErrors, vRequired($email, 'Email'));
+    vAdd($loginErrors, vEmail($email));
 
-        if ($cu && password_verify($password, $cu['password_hash'])) {
-            if ($cu['status'] !== 'active') {
-                $error = 'This club account is not active.';
-            } elseif ($cu['club_status'] === 'rejected') {
-                $error = 'Your club application was not approved. Please contact the administration.';
-            } else {
-                loginClubUser($cu);
-                redirect('/club');
-            }
+    if ($loginErrors) {
+        $error = implode(' ', $loginErrors);
+    } else {
+        $bucket = throttleBucketFor($email);
+
+        if ($throttleMessage = enforceLoginThrottle($bucket, 'sign-in')) {
+            $error = $throttleMessage;
         } else {
-            $error = 'Invalid email or password.';
+            $stmt = $db->prepare("SELECT cu.*, c.status AS club_status FROM club_users cu JOIN clubs c ON c.club_id = cu.club_id WHERE cu.email = ? LIMIT 1");
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $cu = $stmt->get_result()->fetch_assoc();
+
+            if ($cu && password_verify($password, $cu['password_hash'])) {
+                clearLoginFailures($bucket);
+
+                if ($cu['status'] !== 'active') {
+                    $error = 'This club account is not active.';
+                } elseif ($cu['club_status'] === 'rejected') {
+                    $error = 'Your club application was not approved. Please contact the administration.';
+                } else {
+                    loginClubUser($cu);
+                    redirect('/club');
+                }
+            } else {
+                recordLoginFailure($bucket);
+                $remaining = max(0, 5 - loginThrottleState($bucket)['count']);
+                $error = $remaining > 0
+                    ? 'Invalid email or password. ' . $remaining . ' attempt' . ($remaining === 1 ? '' : 's') . ' left before a short pause.'
+                    : 'Invalid email or password. Too many attempts — please wait a moment and try again.';
+            }
         }
     }
 }
@@ -83,6 +99,7 @@ $pageTitle = 'Club Login';
             <?php endif; ?>
 
             <form method="POST" action="<?= url('/club/login') ?>" class="space-y-4">
+                <?= csrfField() ?>
                 <div class="form-group">
                     <label for="email" class="label">Club Email</label>
                     <input type="email" id="email" name="email" class="input" placeholder="club@university.edu" value="<?= e(post('email')) ?>" required autocomplete="username">

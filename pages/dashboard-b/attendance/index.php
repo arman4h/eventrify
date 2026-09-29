@@ -36,6 +36,9 @@ $verifiedReg = null;
 $searchPerformed = false;
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('attendance');
+
     $postAction = post('action');
     $postEventId = (int) post('event_id');
 
@@ -144,7 +147,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     <button type="submit" class="btn-secondary btn-sm">Load</button>
                 </form>
 
+                <?php if (clubCanManage('attendance')): ?>
                 <form method="POST" action="<?= url('/club/attendance') ?>" class="flex gap-3 items-end lg:col-span-2">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action" value="lookup">
                     <input type="hidden" name="event_id" value="<?= $event ? (int) $eventId : (int) ($events[0]['event_id'] ?? 0) ?>">
                     <div class="form-group flex-1 mb-0">
@@ -153,6 +158,11 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                     </div>
                     <button type="submit" class="btn-primary btn-sm">Check</button>
                 </form>
+                <?php else: ?>
+                <p class="text-sm text-gray-500 lg:col-span-2">
+                    You have view-only access, so participants can be listed but not checked in.
+                </p>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -224,8 +234,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 <span class="badge-<?= $verifiedReg['status'] === 'attended' ? 'success' : 'info' ?>"><?= ucfirst(e($verifiedReg['status'])) ?></span>
                             </div>
                         </div>
-                        <?php if ($verifiedReg['status'] !== 'attended'): ?>
+                        <?php if ($verifiedReg['status'] !== 'attended' && clubCanManage('attendance')): ?>
                             <form method="POST" action="<?= url('/club/attendance') ?>" class="mt-4">
+                                <?= csrfField() ?>
                                 <input type="hidden" name="registration_id" value="<?= (int) $verifiedReg['registration_id'] ?>">
                                 <input type="hidden" name="event_id" value="<?= (int) $verifiedReg['event_id'] ?>">
                                 <button type="submit" class="btn-success btn-sm w-full">Confirm Check-in</button>
@@ -290,8 +301,9 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                         <span class="<?= $rb ?>"><?= ucfirst(e($rs)) ?></span>
                                     </td>
                                     <td class="whitespace-nowrap text-right">
-                                        <?php if ($reg['status'] !== 'attended'): ?>
+                                        <?php if ($reg['status'] !== 'attended' && clubCanManage('attendance')): ?>
                                             <form method="POST" style="display:inline;">
+<?= csrfField() ?>
                                                 <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
                                                 <input type="hidden" name="event_id" value="<?= (int) $reg['event_id'] ?>">
                                                 <button type="submit" class="btn-success btn-sm" data-confirm="Confirm check-in for <?= e($reg['guest_name'] ?: 'this participant') ?>?">

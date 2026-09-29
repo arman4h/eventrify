@@ -5,6 +5,12 @@ require_once BASE_PATH . '/app/config/database.php';
 
 requireClubAccess('attendance');
 
+// A view-only executive may not open a write form at all.
+if (!clubCanManage('attendance')) {
+    $_SESSION['flash']['error'] = 'You have view-only access to this section.';
+    redirect('/club');
+}
+
 $pageTitle = 'Walk-in Registration';
 $activePage = 'attendance';
 
@@ -24,6 +30,9 @@ $success = false;
 $guestName = '';
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('attendance');
+
     $name = post('full_name');
     $studentId = post('student_id');
     $email = post('email');
@@ -45,7 +54,7 @@ if (isPost()) {
         $userId = currentUserId();
         $gid = $studentId !== '' ? $studentId : null;
         $ins->bind_param('iissi', $eventId, $sid, $name, $gid, $userId);
-        if ($ins->execute()) {
+        if (dbExec($ins)) {
             $success = true;
             $guestName = $name;
             $_SESSION['flash']['success'] = 'Walk-in registered and checked in.';
@@ -95,6 +104,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 </div>
 
                 <form method="POST" class="space-y-4">
+<?= csrfField() ?>
                     <div class="form-group">
                         <label class="label-required">Full Name</label>
                         <input type="text" name="full_name" class="input" value="<?= e(post('full_name')) ?>" placeholder="Participant's full name" required>

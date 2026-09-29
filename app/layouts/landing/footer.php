@@ -17,7 +17,7 @@
                     <h4 class="text-sm font-semibold text-gray-900 mb-3">Explore</h4>
                     <ul class="space-y-2">
                         <li><a href="<?= url('/events') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Explore Events</a></li>
-                        <li><a href="<?= url('/') ?>#clubs" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Club Requests</a></li>
+                        <li><a href="<?= url('/') ?>#clubs" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">For Clubs</a></li>
                         <li><a href="<?= url('/about') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">About</a></li>
                     </ul>
                 </div>
@@ -27,7 +27,7 @@
                     <ul class="space-y-2">
                         <li><a href="<?= url('/club/register') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">For Clubs</a></li>
                         <li><a href="<?= url('/login') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Student Login</a></li>
-                        <li><a href="<?= url('/admin') ?>#contact" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Admin Login</a></li>
+                        <li><a href="<?= url('/admin/login') ?>" class="text-sm text-gray-500 hover:text-gray-900 transition-colors">Admin Login</a></li>
                     </ul>
                 </div>
 

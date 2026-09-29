@@ -27,6 +27,32 @@ if ($countResult) {
     }
 }
 
+// The hero shows the next events to start, so the first thing a visitor sees
+// is always something they can still register for.
+$upcomingResult = $db->query("
+    SELECT e.event_id, e.title, e.venue, e.start_time, e.category, e.capacity, c.club_name
+    FROM events e
+    JOIN clubs c ON c.club_id = e.club_id
+    WHERE e.status = 'published' AND e.start_time >= NOW()
+    ORDER BY e.start_time ASC
+    LIMIT 3
+");
+$upcoming = $upcomingResult ? $upcomingResult->fetch_all(MYSQLI_ASSOC) : [];
+
+// Platform-wide figures for the "at a glance" panel.
+$stats = $db->query("
+    SELECT
+        (SELECT COUNT(*) FROM events WHERE status = 'published')                        AS published_events,
+        (SELECT COUNT(*) FROM clubs WHERE status = 'approved')                          AS approved_clubs,
+        (SELECT COUNT(*) FROM event_registrations WHERE status IN ('registered','attended')) AS participants,
+        (SELECT COUNT(*) FROM event_registrations WHERE status = 'attended')            AS attended
+")->fetch_assoc();
+
+$participants = (int) ($stats['participants'] ?? 0);
+$attendanceRate = $participants > 0
+    ? (int) round((int) $stats['attended'] * 100 / $participants)
+    : 0;
+
 require BASE_PATH . '/app/layouts/landing/header.php';
 ?>
 
@@ -74,44 +100,34 @@ require BASE_PATH . '/app/layouts/landing/header.php';
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div class="rounded-xl border border-gray-200 p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="inline-flex w-9 h-9 rounded-lg bg-blue-50 text-blue-600 items-center justify-center"><?= icon('ticket', 'w-4 h-4') ?></span>
-                                <span class="badge-primary">Workshop</span>
-                            </div>
-                            <p class="font-semibold text-gray-900 text-sm">Intro to AI Workshop</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Library Building, Lab 203</p>
-                            <div class="mt-3 flex items-center justify-between">
-                                <span class="text-xs text-gray-500">Oct 05, 2026</span>
-                                <span class="badge-success">Open</span>
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-gray-200 p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="inline-flex w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 items-center justify-center"><?= icon('users', 'w-4 h-4') ?></span>
-                                <span class="badge-primary">Competition</span>
-                            </div>
-                            <p class="font-semibold text-gray-900 text-sm">Inter-University Robotics</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Academic Building 3</p>
-                            <div class="mt-3 flex items-center justify-between">
-                                <span class="text-xs text-gray-500">Nov 14, 2026</span>
-                                <span class="badge-warning">Filling fast</span>
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-gray-200 p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="inline-flex w-9 h-9 rounded-lg bg-sky-50 text-sky-600 items-center justify-center"><?= icon('laptop', 'w-4 h-4') ?></span>
-                                <span class="badge-primary">Bootcamp</span>
-                            </div>
-                            <p class="font-semibold text-gray-900 text-sm">Web Development Bootcamp</p>
-                            <p class="text-xs text-gray-500 mt-0.5">Academic Building 1</p>
-                            <div class="mt-3 flex items-center justify-between">
-                                <span class="text-xs text-gray-500">Oct 16, 2026</span>
-                                <span class="badge-success">Open</span>
-                            </div>
-                        </div>
+                        <?php if ($upcoming): ?>
+                            <?php foreach ($upcoming as $card): ?>
+                                <?php
+                                $cardCapacity = (int) $card['capacity'];
+                                $cardCount = $regCounts[(int) $card['event_id']] ?? 0;
+                                $cardFull = $cardCapacity > 0 && $cardCount >= $cardCapacity;
+                                ?>
+                                <a href="<?= url('/event?event_id=' . (int) $card['event_id']) ?>"
+                                   class="rounded-xl border border-gray-200 p-4 hover:border-blue-300 hover:shadow-md transition-all">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <span class="inline-flex w-9 h-9 rounded-lg bg-blue-50 text-blue-600 items-center justify-center"><?= icon('calendar', 'w-4 h-4') ?></span>
+                                        <span class="badge-primary"><?= e($card['category'] ?: 'Event') ?></span>
+                                    </div>
+                                    <p class="font-semibold text-gray-900 text-sm leading-snug"><?= e($card['title']) ?></p>
+                                    <p class="text-xs text-gray-500 mt-0.5 truncate"><?= e($card['club_name']) ?></p>
+                                    <div class="mt-3 flex items-center justify-between">
+                                        <span class="text-xs text-gray-500"><?= formatDate($card['start_time'], 'M d, Y') ?></span>
+                                        <span class="<?= $cardFull ? 'badge-danger' : 'badge-success' ?>">
+                                            <?= $cardFull ? 'Full' : 'Open' ?>
+                                        </span>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p class="sm:col-span-3 text-sm text-gray-500 text-center py-6">
+                                No events are open for registration right now — check back soon.
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -285,45 +301,54 @@ require BASE_PATH . '/app/layouts/landing/header.php';
         <div class="card overflow-hidden shadow-xl border-gray-200">
             <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
                 <div>
-                    <p class="text-sm font-semibold text-gray-900">UIU Robotics Club Dashboard</p>
-                    <p class="text-xs text-gray-500 mt-0.5">Manage your event operations</p>
+                    <p class="text-sm font-semibold text-gray-900">Eventrify at a glance</p>
+                    <p class="text-xs text-gray-500 mt-0.5">What clubs and students are doing right now</p>
                 </div>
                 <span class="badge-success">Live</span>
             </div>
 
             <div class="p-5 grid grid-cols-3 gap-3 border-b border-gray-200">
                 <div class="rounded-lg border border-gray-200 p-3">
-                    <p class="text-xs text-gray-500">Total Events</p>
-                    <p class="text-xl font-bold text-gray-900 mt-1">12</p>
+                    <p class="text-xs text-gray-500">Live Events</p>
+                    <p class="text-xl font-bold text-gray-900 mt-1"><?= (int) ($stats['published_events'] ?? 0) ?></p>
                 </div>
                 <div class="rounded-lg border border-gray-200 p-3">
                     <p class="text-xs text-gray-500">Participants</p>
-                    <p class="text-xl font-bold text-gray-900 mt-1">486</p>
+                    <p class="text-xl font-bold text-gray-900 mt-1"><?= $participants ?></p>
                 </div>
                 <div class="rounded-lg border border-gray-200 p-3">
-                    <p class="text-xs text-gray-500">Attendance</p>
-                    <p class="text-xl font-bold text-gray-900 mt-1">92%</p>
+                    <p class="text-xs text-gray-500">Clubs</p>
+                    <p class="text-xl font-bold text-gray-900 mt-1"><?= (int) ($stats['approved_clubs'] ?? 0) ?></p>
                 </div>
             </div>
 
             <div class="px-5 py-2">
-                <?php $mockRows = [
-                    ['title' => 'Inter-University Robotics Competition', 'date' => 'Nov 14, 2026', 'regs' => '164', 'badge' => 'badge-success', 'label' => 'Open'],
-                    ['title' => 'Beginner Arduino Bootcamp', 'date' => 'Sep 28, 2026', 'regs' => '48', 'badge' => 'badge-warning', 'label' => 'Filling'],
-                    ['title' => 'Intro to AI Workshop', 'date' => 'Oct 05, 2026', 'regs' => '80', 'badge' => 'badge-danger', 'label' => 'Full'],
-                ]; ?>
-                <?php foreach ($mockRows as $row): ?>
-                    <div class="flex items-center justify-between gap-3 py-3 <?= $row !== end($mockRows) ? 'border-b border-gray-100' : '' ?>">
-                        <div class="min-w-0">
-                            <p class="text-sm font-medium text-gray-900 truncate"><?= e($row['title']) ?></p>
-                            <p class="text-xs text-gray-500 mt-0.5"><?= e($row['date']) ?></p>
-                        </div>
-                        <div class="flex items-center gap-2 shrink-0">
-                            <span class="text-xs text-gray-500"><?= e($row['regs']) ?></span>
-                            <span class="<?= $row['badge'] ?>"><?= e($row['label']) ?></span>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+                <?php if ($upcoming): ?>
+                    <?php foreach ($upcoming as $i => $row): ?>
+                        <?php
+                        $rowCapacity = (int) $row['capacity'];
+                        $rowCount = $regCounts[(int) $row['event_id']] ?? 0;
+                        $rowFull = $rowCapacity > 0 && $rowCount >= $rowCapacity;
+                        ?>
+                        <a href="<?= url('/event?event_id=' . (int) $row['event_id']) ?>"
+                           class="flex items-center justify-between gap-3 py-3 <?= $i < count($upcoming) - 1 ? 'border-b border-gray-100' : '' ?> hover:bg-gray-50 rounded-lg px-2 -mx-2 transition-colors">
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate"><?= e($row['title']) ?></p>
+                                <p class="text-xs text-gray-500 mt-0.5"><?= formatDate($row['start_time'], 'M d, Y') ?></p>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <?php if ($rowCapacity > 0): ?>
+                                    <span class="text-xs text-gray-500"><?= $rowCount ?>/<?= $rowCapacity ?></span>
+                                <?php endif; ?>
+                                <span class="<?= $rowFull ? 'badge-danger' : 'badge-success' ?>">
+                                    <?= $rowFull ? 'Full' : 'Open' ?>
+                                </span>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p class="text-sm text-gray-500 text-center py-6">No upcoming events to show yet.</p>
+                <?php endif; ?>
             </div>
         </div>
     </div>

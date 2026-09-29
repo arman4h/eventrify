@@ -147,7 +147,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
         </div>
 
         <div class="flex flex-wrap gap-3 mb-8">
-            <?php if (clubCanAccess('events')): ?>
+            <?php if (clubCanManage('events')): ?>
             <a href="<?= url('/club/events/create') ?>" class="btn-primary">
                 <?= icon('plus', 'w-4 h-4') ?> Create Event
             </a>
@@ -181,7 +181,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 $emptyIcon = 'calendar';
                 $emptyTitle = 'No upcoming events';
                 $emptyText = 'Create your first event to get started.';
-                $emptyHref = clubCanAccess('events') ? url('/club/events/create') : null;
+                $emptyHref = clubCanManage('events') ? url('/club/events/create') : null;
                 $emptyAction = clubCanAccess('events') ? 'Create Event' : null;
                 require BASE_PATH . '/app/components/empty-state.php';
                 ?>
@@ -214,10 +214,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                         <?php if (clubCanAccess('events')): ?>
                                         <a href="<?= url('/club/events/manage?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">View</a>
                                         <?php endif; ?>
-                                        <?php if (clubCanAccess('registrations')): ?>
+                                        <?php if (clubCanManage('registrations')): ?>
                                         <a href="<?= url('/club/registrations?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">Manage</a>
                                         <?php endif; ?>
-                                        <?php if (clubCanAccess('events')): ?>
+                                        <?php if (clubCanManage('events')): ?>
                                         <a href="<?= url('/club/events/edit?event_id=' . $ev['event_id']) ?>" class="btn-ghost btn-sm">Edit</a>
                                         <?php endif; ?>
                                     </div>

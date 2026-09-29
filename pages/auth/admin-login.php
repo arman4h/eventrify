@@ -14,19 +14,34 @@ if (isPost()) {
     $email    = post('email');
     $password = post('password');
 
-    if ($email === '' || $password === '') {
-        $error = 'Please fill in all fields.';
-    } else {
-        $stmt = $db->prepare("SELECT * FROM system_admins WHERE email = ? LIMIT 1");
-        $stmt->bind_param('s', $email);
-        $stmt->execute();
-        $admin = $stmt->get_result()->fetch_assoc();
+    $loginErrors = [];
+    vAdd($loginErrors, vRequired($email, 'Email'));
+    vAdd($loginErrors, vEmail($email));
 
-        if ($admin && password_verify($password, $admin['password_hash'])) {
-            loginSystemAdmin($admin);
-            redirect('/admin');
+    if ($loginErrors) {
+        $error = implode(' ', $loginErrors);
+    } else {
+        $bucket = throttleBucketFor($email);
+
+        if ($throttleMessage = enforceLoginThrottle($bucket, 'sign-in')) {
+            $error = $throttleMessage;
         } else {
-            $error = 'Invalid email or password.';
+            $stmt = $db->prepare("SELECT * FROM system_admins WHERE email = ? LIMIT 1");
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $admin = $stmt->get_result()->fetch_assoc();
+
+            if ($admin && password_verify($password, $admin['password_hash'])) {
+                clearLoginFailures($bucket);
+                loginSystemAdmin($admin);
+                redirect('/admin');
+            } else {
+                recordLoginFailure($bucket);
+                $remaining = max(0, 5 - loginThrottleState($bucket)['count']);
+                $error = $remaining > 0
+                    ? 'Invalid email or password. ' . $remaining . ' attempt' . ($remaining === 1 ? '' : 's') . ' left before a short pause.'
+                    : 'Invalid email or password. Too many attempts — please wait a moment and try again.';
+            }
         }
     }
 }
@@ -72,6 +87,7 @@ $pageTitle = 'Admin Login';
             <?php endif; ?>
 
             <form method="POST" action="<?= url('/admin/login') ?>" class="space-y-4">
+                <?= csrfField() ?>
                 <div class="form-group">
                     <label for="email" class="label">Admin Email</label>
                     <input type="email" id="email" name="email" class="input" placeholder="admin@eventrify.edu" value="<?= e(post('email')) ?>" required autocomplete="username">

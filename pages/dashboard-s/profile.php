@@ -100,7 +100,7 @@ require BASE_PATH . '/app/layouts/dashboard-s/sidebar.php';
                         <?php if (!empty($student['department'])): ?>
                         <span class="badge badge-neutral"><?= e($student['department']) ?></span>
                         <?php endif; ?>
-                        <span class="badge badge-neutral">United International University</span>
+                        <span class="badge badge-neutral"><?= e(universityName()) ?></span>
                     </div>
                     <p class="text-sm text-gray-500 mt-1.5"><?= e($student['email'] ?? '') ?></p>
                 </div>
@@ -137,7 +137,7 @@ require BASE_PATH . '/app/layouts/dashboard-s/sidebar.php';
                 <div class="mt-4">
                     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
                         <span class="text-sm text-gray-500">University</span>
-                        <span class="text-sm text-gray-500">United International University</span>
+                        <span class="text-sm font-medium text-gray-900 text-right"><?= e(universityName()) ?></span>
                     </div>
                     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
                         <span class="text-sm text-gray-500">Department</span>

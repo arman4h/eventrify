@@ -5,6 +5,12 @@ require_once BASE_PATH . '/app/config/database.php';
 
 requireClubAccess('events');
 
+// A view-only executive may not open a write form at all.
+if (!clubCanManage('events')) {
+    $_SESSION['flash']['error'] = 'You have view-only access to this section.';
+    redirect('/club');
+}
+
 $pageTitle = 'Edit Event';
 $activePage = 'events';
 
@@ -22,6 +28,9 @@ if (!$event) {
 $errors = [];
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('events');
+
     $title = post('title');
     $description = post('description');
     $category = post('category');
@@ -44,6 +53,13 @@ if (isPost()) {
     if ($title === '' || $venue === '' || $startDateTime === '') {
         $errors[] = 'Title, venue, and start time are required.';
     }
+
+    // Match the column widths so oversized input is refused up front instead of
+    // failing later as a "Data too long" error on UPDATE.
+    vAdd($errors, vMaxLen($title, 150, 'Title'));
+    vAdd($errors, vMaxLen($category, 50, 'Category'));
+    vAdd($errors, vMaxLen($venue, 150, 'Venue'));
+    vAdd($errors, vInt(post('capacity'), 'Capacity', 0, 1000000));
 
     $startTs = $startDateTime !== '' ? strtotime($startDateTime) : false;
     $endTs = $endDateTime !== '' ? strtotime($endDateTime) : false;
@@ -97,13 +113,15 @@ if (isPost()) {
         $end = $endDateTime !== '' ? $endDateTime : null;
         $deadline = $registrationDeadline !== '' ? $registrationDeadline : null;
 
-        if ($poster !== null) {
-            $stmt->bind_param($bindTypes, $title, $description, $category, $poster, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
-        } else {
-            $stmt->bind_param($bindTypes, $title, $description, $category, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
-        }
+        try {
+            if ($poster !== null) {
+                $stmt->bind_param($bindTypes, $title, $description, $category, $poster, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
+            } else {
+                $stmt->bind_param($bindTypes, $title, $description, $category, $venue, $startDateTime, $end, $deadline, $capacity, $status, $eventId, $clubId);
+            }
 
-        if ($stmt->execute()) {
+            $stmt->execute();
+
             $delFields = $db->prepare("DELETE FROM event_registration_fields WHERE event_id = ?");
             $delFields->bind_param('i', $eventId);
             $delFields->execute();
@@ -112,7 +130,8 @@ if (isPost()) {
 
             $_SESSION['flash']['success'] = 'Event updated successfully.';
             redirect('/club/events');
-        } else {
+        } catch (mysqli_sql_exception $e) {
+            error_log('Event update failed: ' . $e->getMessage());
             $errors[] = 'Failed to update event.';
         }
     }
@@ -160,6 +179,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
         <?php endforeach; ?>
 
         <form method="POST" enctype="multipart/form-data" class="card p-6 sm:p-8 space-y-8 max-w-2xl">
+<?= csrfField() ?>
             <section>
                 <h3 class="text-base font-semibold text-gray-900 mb-4">Basic Information</h3>
                 <div class="space-y-4">

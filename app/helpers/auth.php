@@ -57,6 +57,10 @@ function isExecutive(): bool
 
 function loginStudent(array $student): void
 {
+    // New session id + new CSRF token on every privilege change (session fixation).
+    regenerateSession();
+    rotateCsrfToken();
+
     $_SESSION['user_id']   = (int) $student['student_id'];
     $_SESSION['user_type'] = 'student';
     $_SESSION['user'] = [
@@ -71,6 +75,9 @@ function loginStudent(array $student): void
 
 function loginClubUser(array $clubUser): void
 {
+    regenerateSession();
+    rotateCsrfToken();
+
     $_SESSION['user_id']   = (int) $clubUser['club_user_id'];
     $_SESSION['user_type'] = 'club_user';
     $_SESSION['user'] = [
@@ -86,6 +93,9 @@ function loginClubUser(array $clubUser): void
 
 function loginSystemAdmin(array $admin): void
 {
+    regenerateSession();
+    rotateCsrfToken();
+
     $_SESSION['user_id']   = (int) $admin['admin_id'];
     $_SESSION['user_type'] = 'system_admin';
     $_SESSION['user'] = [

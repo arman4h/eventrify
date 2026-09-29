@@ -26,21 +26,33 @@ if (isPost()) {
         $errors[] = 'Full name is required.';
     }
 
-    if (empty($errors)) {
-        $stmt = $db->prepare("
-            UPDATE students
-            SET full_name = ?, phone = ?, department = ?, interests = ?, batch = ?
-            WHERE student_id = ?
-        ");
-        $stmt->bind_param('sssssi', $fullName, $phone, $department, $interests, $batch, $studentId);
+    // Match the column widths so oversized input is refused up front instead of
+    // failing later as a "Data too long" error on UPDATE.
+    vAdd($errors, vMaxLen($fullName, 100, 'Full name'));
+    vAdd($errors, vMaxLen($department, 100, 'Department'));
+    vAdd($errors, vMaxLen($batch, 20, 'Batch'));
+    vAdd($errors, vMaxLen($phone, 20, 'Phone number'));
+    vAdd($errors, vPhone($phone));
+    // Department is free text here ("Computer Science & Engineering"), unlike
+    // registration which picks a short department code, so only bound its size.
 
-        if ($stmt->execute()) {
+    if (empty($errors)) {
+        try {
+            $stmt = $db->prepare("
+                UPDATE students
+                SET full_name = ?, phone = ?, department = ?, interests = ?, batch = ?
+                WHERE student_id = ?
+            ");
+            $stmt->bind_param('sssssi', $fullName, $phone, $department, $interests, $batch, $studentId);
+            $stmt->execute();
+
             $_SESSION['user']['name'] = $fullName;
             $_SESSION['user']['department'] = $department;
             flash('success', 'Your profile has been updated successfully.');
             clearOld();
             redirect('/student/profile');
-        } else {
+        } catch (mysqli_sql_exception $e) {
+            error_log('Profile update failed: ' . $e->getMessage());
             $errors[] = 'Could not save your changes. Please try again.';
         }
     }
@@ -77,6 +89,7 @@ require BASE_PATH . '/app/layouts/dashboard-s/sidebar.php';
         <?php endforeach; ?>
 
         <form method="POST" action="<?= url('/student/profile/edit') ?>" enctype="multipart/form-data" class="card p-6 sm:p-8 max-w-2xl">
+            <?= csrfField() ?>
             <div class="flex items-center gap-5 pb-6 border-b border-gray-200">
                 <span class="avatar-lg !w-16 !h-16 !text-xl" aria-hidden="true"><?= e(substr($student['full_name'] ?? 'S', 0, 1)) ?></span>
                 <div>

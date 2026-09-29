@@ -223,6 +223,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                     <p class="text-sm text-gray-600 mb-5">Approve to activate this club on the platform, or reject the application with a reason.</p>
 
                     <form method="POST" action="<?= url('/admin/club-requests/review?club_id=' . $clubId) ?>" class="mb-3">
+                        <?= csrfField() ?>
                         <input type="hidden" name="action" value="approve">
                         <input type="hidden" name="club_id" value="<?= (int) $clubId ?>">
                         <button type="submit" data-confirm="Approve <?= e($club['club_name']) ?> and let them start using Eventrify?" class="btn-success btn-lg w-full">
@@ -231,6 +232,7 @@ require BASE_PATH . '/app/layouts/dashboard-a/sidebar.php';
                     </form>
 
                     <form method="POST" action="<?= url('/admin/club-requests/review?club_id=' . $clubId) ?>">
+                        <?= csrfField() ?>
                         <input type="hidden" name="action" value="reject">
                         <input type="hidden" name="club_id" value="<?= (int) $clubId ?>">
                         <label for="review_reason" class="label">Reason for rejection</label>

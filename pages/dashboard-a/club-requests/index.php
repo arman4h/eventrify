@@ -102,12 +102,14 @@ foreach ($requests as $request) {
         $actions .= '<a href="' . e($reviewUrl) . '" class="btn-primary btn-sm mb-1">Review</a>';
 
         $actions .= '<form method="POST" action="' . e(url('/admin/club-requests')) . '" class="inline">
+<?= csrfField() ?>
             <input type="hidden" name="action" value="approve">
             <input type="hidden" name="club_id" value="' . (int) $request['club_id'] . '">
             <button type="submit" data-confirm="Approve this club application?" class="btn-success btn-sm mb-1">Approve</button>
         </form>';
 
         $actions .= '<form method="POST" action="' . e(url('/admin/club-requests')) . '" class="inline">
+<?= csrfField() ?>
             <input type="hidden" name="action" value="reject">
             <input type="hidden" name="club_id" value="' . (int) $request['club_id'] . '">
             <button type="submit" data-confirm="Reject this club application?" class="btn-danger btn-sm">Reject</button>

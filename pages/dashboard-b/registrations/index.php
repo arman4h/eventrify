@@ -7,6 +7,7 @@ requireClubAccess('registrations');
 
 $pageTitle = 'Registrations';
 $activePage = 'registrations';
+$canManage = clubCanManage('registrations');
 
 $clubId = (int) currentUser()['club_id'];
 $filterEventId = (int) get('event_id', 0);
@@ -16,6 +17,9 @@ $perPage = 10;
 $offset = ($page - 1) * $perPage;
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('registrations');
+
     $action = post('action');
     $regId = (int) post('registration_id');
 
@@ -28,7 +32,8 @@ if (isPost()) {
         if ($owner) {
             if ($action === 'checkin' && $owner['status'] !== 'attended') {
                 $upd = $db->prepare("UPDATE event_registrations SET status = 'attended', checked_in_at = NOW(), check_in_method = 'manual', checked_in_by = ? WHERE registration_id = ?");
-                $upd->bind_param('ii', currentUserId(), $regId);
+                $checkedInBy = currentUserId();
+                $upd->bind_param('ii', $checkedInBy, $regId);
                 $upd->execute();
                 $_SESSION['flash']['success'] = ($owner['guest_name'] ?: 'Participant') . ' checked in.';
             } elseif ($action === 'checkin' && $owner['status'] === 'attended') {
@@ -190,16 +195,19 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                 </td>
                                 <td class="whitespace-nowrap">
                                     <div class="flex gap-2 justify-end">
-                                        <button type="button" class="btn-secondary btn-sm" data-modal-open="checkinModal-<?= (int) $reg['registration_id'] ?>" <?= $reg['status'] === 'attended' ? 'disabled' : '' ?>>
-                                            <?= icon('check-circle', 'w-4 h-4') ?> Check In
-                                        </button>
-                                        <form method="POST" style="display:inline;">
-                                            <input type="hidden" name="action" value="delete">
-                                            <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
-                                            <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this registration? This cannot be undone.">
-                                                <?= icon('trash', 'w-4 h-4') ?>
+                                        <?php if ($canManage): ?>
+                                            <button type="button" class="btn-secondary btn-sm" data-modal-open="checkinModal-<?= (int) $reg['registration_id'] ?>" <?= $reg['status'] === 'attended' ? 'disabled' : '' ?>>
+                                                <?= icon('check-circle', 'w-4 h-4') ?> Check In
                                             </button>
-                                        </form>
+                                            <form method="POST" style="display:inline;">
+                                                <?= csrfField() ?>
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
+                                                <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this registration? This cannot be undone.">
+                                                    <?= icon('trash', 'w-4 h-4') ?>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -222,6 +230,10 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
 <?php
 $registrations->data_seek(0);
 while ($reg = $registrations->fetch_assoc()):
+    // View-only executives get no check-in modal at all.
+    if (!$canManage) {
+        continue;
+    }
     $modalId = 'checkinModal-' . (int) $reg['registration_id'];
     $modalTitle = 'Check in Attendance';
     ob_start();
@@ -250,8 +262,13 @@ while ($reg = $registrations->fetch_assoc()):
     <div class="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg p-3">
         <?= icon('check-circle', 'w-5 h-5') ?> This participant has already been checked in.
     </div>
+<?php elseif (!$canManage): ?>
+    <div class="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+        <?= icon('shield', 'w-5 h-5') ?> Check-in is disabled &mdash; you have view-only access.
+    </div>
 <?php else: ?>
     <form method="POST">
+        <?= csrfField() ?>
         <input type="hidden" name="action" value="checkin">
         <input type="hidden" name="registration_id" value="<?= (int) $reg['registration_id'] ?>">
         <div class="flex gap-3 justify-end">

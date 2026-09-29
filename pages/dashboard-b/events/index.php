@@ -7,6 +7,7 @@ requireClubAccess('events');
 
 $pageTitle = 'Events';
 $activePage = 'events';
+$canManage = clubCanManage('events');
 
 $clubId = (int) currentUser()['club_id'];
 $search = get('q');
@@ -65,9 +66,11 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <h2 class="page-title">Events</h2>
                 <p class="page-subtitle">Create and manage club events</p>
             </div>
-            <a href="<?= url('/club/events/create') ?>" class="btn-primary">
-                <?= icon('plus', 'w-4 h-4') ?> Create Event
-            </a>
+            <?php if ($canManage): ?>
+                <a href="<?= url('/club/events/create') ?>" class="btn-primary">
+                    <?= icon('plus', 'w-4 h-4') ?> Create Event
+                </a>
+            <?php endif; ?>
         </div>
 
         <div class="card overflow-hidden">
@@ -89,8 +92,8 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 $emptyIcon = 'calendar';
                 $emptyTitle = 'No events found';
                 $emptyText = $search !== '' ? 'Try a different search term.' : 'Create your first event to get started.';
-                $emptyHref = url('/club/events/create');
-                $emptyAction = 'Create Event';
+                $emptyHref = $canManage ? url('/club/events/create') : null;
+                $emptyAction = $canManage ? 'Create Event' : '';
                 require BASE_PATH . '/app/components/empty-state.php';
                 ?>
             <?php else: ?>
@@ -134,15 +137,18 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                         <a href="<?= url('/club/events/manage?event_id=' . $event['event_id']) ?>" class="btn-ghost btn-sm">
                                             <?= icon('eye', 'w-4 h-4') ?> Manage
                                         </a>
-                                        <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="btn-ghost btn-sm">
-                                            <?= icon('edit', 'w-4 h-4') ?> Edit
-                                        </a>
-                                        <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
-                                            <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
-                                            <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this event?">
-                                                <?= icon('trash', 'w-4 h-4') ?>
-                                            </button>
-                                        </form>
+                                        <?php if ($canManage): ?>
+                                            <a href="<?= url('/club/events/edit?event_id=' . $event['event_id']) ?>" class="btn-ghost btn-sm">
+                                                <?= icon('edit', 'w-4 h-4') ?> Edit
+                                            </a>
+                                            <form method="POST" action="<?= url('/club/events/delete') ?>" style="display:inline;">
+                                                <?= csrfField() ?>
+                                                <input type="hidden" name="event_id" value="<?= (int) $event['event_id'] ?>">
+                                                <button type="submit" class="btn-danger btn-sm" data-confirm="Delete this event?">
+                                                    <?= icon('trash', 'w-4 h-4') ?>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

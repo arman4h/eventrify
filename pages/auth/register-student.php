@@ -21,19 +21,39 @@ if (isPost()) {
     $confirm      = post('confirm_password');
     $agree        = isset($_POST['agree']);
 
-    if ($fullName === '' || $email === '' || $universityId === '' || $department === '' || $password === '' || $confirm === '') {
+    // Match the column widths so oversized input is refused up front instead
+    // of failing later as a "Data too long" fatal on INSERT.
+    $limits = [
+        'Full name'     => [$fullName, 100],
+        'Email'         => [$email, 100],
+        'University ID' => [$universityId, 20],
+        'Department'    => [$department, 100],
+        'Phone number'  => [$phone, 20],
+    ];
+
+    // Phone is the only optional one, so it is checked for size but not presence.
+    $missing = $password === '' || $confirm === '';
+    foreach (['Full name', 'Email', 'University ID', 'Department'] as $label) {
+        if (trim($limits[$label][0]) === '') {
+            $missing = true;
+        }
+    }
+    if ($missing) {
         $errors[] = 'Please fill in all required fields.';
     }
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Please enter a valid email address.';
+    foreach ($limits as $label => [$value, $max]) {
+        vAdd($errors, vMaxLen($value, $max, $label));
     }
 
-    if (strlen($password) < 8) {
-        $errors[] = 'Password must be at least 8 characters.';
-    }
+    vAdd($errors, vEmail($email));
+    vAdd($errors, vUniversityId($universityId));
+    vAdd($errors, vPhone($phone));
+    vAdd($errors, vIn($department, array_keys(departmentIdPrefixes()), 'Department'));
+    vAdd($errors, vPassword($password));
+    vAdd($errors, vPasswordNotSimilar($password, [$fullName, $email, $universityId]));
 
-    if ($password !== $confirm) {
+    if ($password !== '' && $password !== $confirm) {
         $errors[] = 'Passwords do not match.';
     }
 
@@ -41,7 +61,7 @@ if (isPost()) {
         $errors[] = 'You must agree to the Terms and Privacy Policy to register.';
     }
 
-    if ($department !== '') {
+    if ($department !== '' && $universityId !== '') {
         $prefixes = departmentIdPrefixes();
         $prefix = $prefixes[$department] ?? null;
 
@@ -71,27 +91,32 @@ if (isPost()) {
     if (empty($errors)) {
         $hashed = password_hash($password, PASSWORD_DEFAULT);
 
-        $stmt = $db->prepare("
-            INSERT INTO students (university_id, full_name, email, password_hash, department, phone, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, 1)
-        ");
-        $stmt->bind_param(
-            'ssssss',
-            $universityId,
-            $fullName,
-            $email,
-            $hashed,
-            $department,
-            $phone
-        );
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO students (university_id, full_name, email, password_hash, department, phone, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            ");
+            $stmt->bind_param(
+                'ssssss',
+                $universityId,
+                $fullName,
+                $email,
+                $hashed,
+                $department,
+                $phone
+            );
 
-        if ($stmt->execute()) {
+            $stmt->execute();
+        } catch (mysqli_sql_exception $e) {
+            error_log('Student registration insert failed: ' . $e->getMessage());
+            $errors[] = 'Registration failed. Please try again.';
+        }
+
+        if (empty($errors)) {
             $newStudentId = (int) $db->insert_id;
             linkGuestRegistrations($newStudentId, $email);
             $registeredEmail = $email;
             setOld([]);
-        } else {
-            $errors[] = 'Registration failed. Please try again.';
         }
     }
 }
@@ -140,14 +165,15 @@ $pageTitle = 'Create Account';
                 <?php endforeach; ?>
 
                 <form method="POST" action="<?= url('/register-student') ?>" class="space-y-4">
+                    <?= csrfField() ?>
                     <div class="form-group">
                         <label for="full_name" class="label label-required">Full Name</label>
-                        <input type="text" id="full_name" name="full_name" class="input" placeholder="John Doe" value="<?= e(post('full_name')) ?>" required>
+                        <input type="text" id="full_name" name="full_name" maxlength="100" class="input" placeholder="John Doe" value="<?= e(post('full_name')) ?>" required>
                     </div>
 
                     <div class="form-group">
                         <label for="email" class="label label-required">University Email</label>
-                        <input type="email" id="email" name="email" class="input" placeholder="your.name@university.edu" value="<?= e(post('email')) ?>" required>
+                        <input type="email" id="email" name="email" maxlength="100" class="input" placeholder="your.name@university.edu" value="<?= e(post('email')) ?>" required>
                         <?php if (in_array('An account with that email already exists.', $errors, true)): ?>
                             <p class="text-xs text-red-600 mt-1"><?= icon('x-circle', 'w-3.5 h-3.5 inline -mt-0.5') ?> This email is already registered.</p>
                         <?php endif; ?>
@@ -165,14 +191,14 @@ $pageTitle = 'Create Account';
 
                     <div class="form-group">
                         <label for="university_id" class="label label-required">Student ID</label>
-                        <input type="text" id="university_id" name="university_id" class="input" placeholder="e.g. 0112211234" value="<?= e(post('university_id')) ?>" required>
+                        <input type="text" id="university_id" name="university_id" maxlength="20" class="input" placeholder="e.g. 0112211234" value="<?= e(post('university_id')) ?>" required>
                         <p class="form-hint" id="id-prefix-hint">Student ID starts with your department prefix.</p>
                         <p class="text-xs text-red-600 mt-1 hidden" id="id-prefix-error"></p>
                     </div>
 
                     <div class="form-group">
                         <label for="phone" class="label">Phone Number</label>
-                        <input type="tel" id="phone" name="phone" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>">
+                        <input type="tel" id="phone" name="phone" maxlength="20" class="input" placeholder="01XXXXXXXXX" value="<?= e(post('phone')) ?>">
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -25,4 +25,30 @@ if (PHP_SAPI !== 'cli') {
     define('BASE_URL', APP_URL);
 }
 
-session_start();
+// ── Session bootstrap ────────────────────────────────────────────────
+// Cookies are hardened before the session starts: HttpOnly keeps the id out
+// of reach of scripts, SameSite=Lax blocks cross-site form posts, and
+// Secure is set automatically when the request arrived over HTTPS.
+$requestIsHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
+    || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
+
+if (PHP_SAPI !== 'cli') {
+    ini_set('session.use_strict_mode', '1');   // reject client-supplied session ids
+    ini_set('session.use_only_cookies', '1'); // never read the id from the URL
+    ini_set('session.cookie_httponly', '1');
+
+    session_name('EVENTRIFY_SESSID');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => ($basePath !== '' ? $basePath : '') . '/',
+        'domain'   => '',
+        'secure'   => $requestIsHttps,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}

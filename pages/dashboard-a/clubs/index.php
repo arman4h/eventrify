@@ -58,7 +58,8 @@ if ($page > $totalPages) {
     $offset = ($page - 1) * $limit;
 }
 
-$sql = "SELECT c.club_id, c.club_name, c.status, c.created_at,
+$sql = "SELECT c.club_id, c.club_name, c.university, c.club_type, c.established_year,
+        c.official_email, c.website, c.status, c.created_at,
         (SELECT COUNT(*) FROM events e WHERE e.club_id = c.club_id) AS event_count,
         (SELECT COUNT(*) FROM club_users cu WHERE cu.club_id = c.club_id) AS member_count
         FROM clubs c
@@ -75,7 +76,7 @@ $clubs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $activeCount = (int) $db->query("SELECT COUNT(*) AS n FROM clubs WHERE status = 'approved'")->fetch_assoc()['n'];
 
-$columns = ['Club', 'University', 'Status', 'Events', 'Members', 'Registered'];
+$columns = ['Club', 'University', 'Contact', 'Status', 'Events', 'Members', 'Registered'];
 
 $rows = [];
 
@@ -87,12 +88,14 @@ foreach ($clubs as $club) {
 
     if ($isActive) {
         $actions .= '<form method="POST" action="' . e(url('/admin/clubs')) . '" class="inline">
+<?= csrfField() ?>
             <input type="hidden" name="action" value="suspend">
             <input type="hidden" name="club_id" value="' . (int) $club['club_id'] . '">
             <button type="submit" data-confirm="Suspend ' . e($club['club_name']) . '? Users can no longer access this club until it is re-verified." class="btn-danger btn-sm">Suspend</button>
         </form>';
     } else {
         $actions .= '<form method="POST" action="' . e(url('/admin/clubs')) . '" class="inline">
+<?= csrfField() ?>
             <input type="hidden" name="action" value="reactivate">
             <input type="hidden" name="club_id" value="' . (int) $club['club_id'] . '">
             <button type="submit" data-confirm="Reactivate ' . e($club['club_name']) . '?" class="btn-success btn-sm">Reactivate</button>
@@ -115,9 +118,24 @@ foreach ($clubs as $club) {
     require BASE_PATH . '/app/components/badge.php';
     $statusCell = ob_get_clean();
 
+    $contactBits = [];
+    if (!empty($club['club_type'])) {
+        $contactBits[] = e($club['club_type']);
+    }
+    if (!empty($club['established_year'])) {
+        $contactBits[] = 'est. ' . (int) $club['established_year'];
+    }
+    if (!empty($club['official_email'])) {
+        $contactBits[] = e($club['official_email']);
+    }
+    $contactCell = $contactBits
+        ? '<div class="text-sm text-gray-600 space-y-0.5">' . implode('<br>', $contactBits) . '</div>'
+        : '<p class="text-sm text-gray-400">&mdash;</p>';
+
     $rows[] = [
         $clubCell,
-        '<p class="text-sm text-gray-600">United International University</p>',
+        '<p class="text-sm text-gray-600">' . e($club['university'] ?? '—') . '</p>',
+        $contactCell,
         $statusCell,
         '<p class="text-sm font-medium text-gray-900">' . (int) $club['event_count'] . '</p>',
         '<p class="text-sm font-medium text-gray-900">' . (int) $club['member_count'] . '</p>',

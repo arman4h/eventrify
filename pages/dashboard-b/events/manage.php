@@ -7,6 +7,7 @@ requireClubAccess('events');
 
 $pageTitle = 'Manage Event';
 $activePage = 'events';
+$canManage = clubCanManage('events');
 
 $clubId = (int) currentUser()['club_id'];
 $eventId = (int) get('event_id');
@@ -21,6 +22,9 @@ if (!$event) {
 }
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('events');
+
     $action = post('action');
 
     if ($action === 'cancel') {
@@ -36,8 +40,9 @@ if (isPost()) {
         $orig = $stmt->get_result()->fetch_assoc();
         if ($orig) {
             $newStmt = $db->prepare("INSERT INTO events (club_id, title, description, category, poster, venue, start_time, end_time, registration_deadline, capacity, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)");
-            $newStmt->bind_param('issssssssii', $clubId, $orig['title'], $orig['description'], $orig['category'], $orig['poster'], $orig['venue'], $orig['start_time'], $orig['end_time'], $orig['registration_deadline'], $orig['capacity'], currentUserId());
-            if ($newStmt->execute()) {
+            $createdBy = currentUserId();
+            $newStmt->bind_param('issssssssii', $clubId, $orig['title'], $orig['description'], $orig['category'], $orig['poster'], $orig['venue'], $orig['start_time'], $orig['end_time'], $orig['registration_deadline'], $orig['capacity'], $createdBy);
+            if (dbExec($newStmt)) {
                 $newEventId = $newStmt->insert_id;
 
                 $fieldSrc = $db->prepare("SELECT field_label, field_type, field_options, is_required, display_order FROM event_registration_fields WHERE event_id = ? ORDER BY display_order");
@@ -126,20 +131,26 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                 <p class="page-subtitle"><?= formatDate($event['start_time'], 'M d, Y') ?></p>
             </div>
             <div class="flex flex-wrap gap-2">
-                <a href="<?= url('/club/events/edit?event_id=' . $eventId) ?>" class="btn-secondary btn-sm">
-                    <?= icon('edit', 'w-4 h-4') ?> Edit Event
-                </a>
+                <?php if ($canManage): ?>
+                    <a href="<?= url('/club/events/edit?event_id=' . $eventId) ?>" class="btn-secondary btn-sm">
+                        <?= icon('edit', 'w-4 h-4') ?> Edit Event
+                    </a>
+                <?php endif; ?>
                 <button type="button" class="btn-ghost btn-sm" data-copy="<?= url('/event?event_id=' . $eventId) ?>">
                     <?= icon('share', 'w-4 h-4') ?> Share
                 </button>
-                <form method="POST" style="display:inline;">
-                    <input type="hidden" name="action" value="duplicate">
-                    <button type="submit" class="btn-secondary btn-sm">
-                        <?= icon('copy', 'w-4 h-4') ?> Duplicate
-                    </button>
-                </form>
-                <?php if ($status !== 'cancelled'): ?>
+                <?php if ($canManage): ?>
                     <form method="POST" style="display:inline;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="duplicate">
+                        <button type="submit" class="btn-secondary btn-sm">
+                            <?= icon('copy', 'w-4 h-4') ?> Duplicate
+                        </button>
+                    </form>
+                <?php endif; ?>
+                <?php if ($canManage && $status !== 'cancelled'): ?>
+                    <form method="POST" style="display:inline;">
+                        <?= csrfField() ?>
                         <input type="hidden" name="action" value="cancel">
                         <button type="submit" class="btn-danger btn-sm" data-confirm="Cancel this event?">
                             <?= icon('x', 'w-4 h-4') ?> Cancel Event

@@ -341,10 +341,10 @@ WHERE NOT EXISTS (
 
 -- Room requests
 INSERT INTO room_requests (club_id, event_id, requested_date, start_time, end_time, expected_participants, preferred_room, reason, status, reviewed_at) VALUES
-(1, 2, '2026-11-14', '08:30:00', '09:50:00', 200, 'Ground Floor Hall', 'Large hall needed for the competition arena and seating for teams.', 'pending', NULL),
-(3, 6, '2026-10-20', '09:51:00', '11:10:00', 150, 'Auditorium', 'Auditorium fits the expected seminar turnout.', 'approved', NOW() - INTERVAL 2 DAY),
-(1, 7, '2026-12-01', '12:31:00', '13:40:00', 300, 'Open Ground', 'Outdoor showcase - need permission to use the plaza.', 'pending', NULL),
-(2, 4, '2026-10-16', '15:11:00', '16:30:00', 100, 'Room 501', 'Two-day bootcamp needs a projector and AC room.', 'declined', NOW() - INTERVAL 1 DAY);
+(1, 2, '2026-11-14', '08:30:00', '09:50:00', 200, 'Academic Building 3, Ground Floor Hall', 'Large hall needed for the competition arena and seating for teams.', 'pending', NULL),
+(3, 6, '2026-10-20', '09:50:00', '11:10:00', 150, 'Auditorium, Admin Building', 'Auditorium fits the expected seminar turnout.', 'approved', NOW() - INTERVAL 2 DAY),
+(1, 7, '2026-12-01', '12:30:00', '13:40:00', 300, 'Central Plaza', 'Outdoor showcase - need permission to use the plaza.', 'pending', NULL),
+(2, 4, '2026-10-16', '15:10:00', '16:30:00', 100, 'Academic Building 1, Room 501', 'Two-day bootcamp needs a projector and AC room.', 'declined', NOW() - INTERVAL 1 DAY);
 
 -- Reports
 INSERT INTO reports (reporter_id, reported_club_id, reported_event_id, subject, description, status, created_at) VALUES

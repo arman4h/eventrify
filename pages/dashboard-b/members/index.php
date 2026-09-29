@@ -5,7 +5,7 @@ require_once BASE_PATH . '/app/config/database.php';
 
 requireClubAccess('members');
 
-$pageTitle = 'User';
+$pageTitle = 'Member Management';
 $activePage = 'members';
 
 $me = currentUser();
@@ -13,6 +13,9 @@ $clubId = (int) ($me['club_id'] ?? 0);
 $isOwner = isClubOwner();
 
 if (isPost()) {
+    // View-only executives must not be able to write, even by hand-crafting a POST.
+    requireClubManage('members');
+
     $action = post('action');
 
     if (!isClubOwner()) {
@@ -254,6 +257,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                     <?php if ($member['role'] !== 'owner'): ?>
                                         <div class="flex gap-2 justify-end">
                                             <form method="POST" style="display:inline;">
+<?= csrfField() ?>
                                                 <input type="hidden" name="action" value="toggle_status">
                                                 <input type="hidden" name="member_id" value="<?= (int) $member['club_user_id'] ?>">
                                                 <button type="submit" class="btn-ghost btn-sm" title="<?= $member['status'] === 'active' ? 'Deactivate' : 'Activate' ?>">
@@ -262,6 +266,7 @@ require BASE_PATH . '/app/layouts/dashboard-b/sidebar.php';
                                             </form>
                                             <?php if ($member['status'] !== 'removed'): ?>
                                                 <form method="POST" style="display:inline;">
+<?= csrfField() ?>
                                                     <input type="hidden" name="action" value="remove">
                                                     <input type="hidden" name="member_id" value="<?= (int) $member['club_user_id'] ?>">
                                                     <button type="submit" class="btn-danger btn-sm" data-confirm="Remove this user?">
@@ -291,6 +296,7 @@ $modalTitle = 'Create User';
 ob_start();
 ?>
 <form method="POST" class="space-y-4">
+<?= csrfField() ?>
     <input type="hidden" name="action" value="create">
     <div class="grid grid-cols-2 gap-4">
         <div class="form-group col-span-2">

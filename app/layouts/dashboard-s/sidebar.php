@@ -37,6 +37,18 @@
             My Registrations
         </a>
 
+        <a href="<?= url('/student/reports') ?>" class="sidebar-link <?= $activePage === 'reports' ? 'sidebar-link-active' : '' ?>">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.74-3L13.74 4a2 2 0 00-3.48 0l-7 12a2 2 0 001.74 3z"/></svg>
+            My Reports
+        </a>
+
+        <p class="sidebar-section-title !text-gray-600">Support</p>
+
+        <a href="<?= url('/student/report') ?>" class="sidebar-link <?= $activePage === 'report-new' ? 'sidebar-link-active' : '' ?>">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.74-3L13.74 4a2 2 0 00-3.48 0l-7 12a2 2 0 001.74 3z"/></svg>
+            Report a Problem
+        </a>
+
         <a href="<?= url('/events') ?>" class="sidebar-link <?= $activePage === 'discover' ? 'sidebar-link-active' : '' ?>">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             Discover Events

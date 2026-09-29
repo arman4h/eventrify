@@ -14,24 +14,40 @@ if (isPost()) {
     $email    = post('email');
     $password = post('password');
 
-    if ($email === '' || $password === '') {
-        $error = 'Please fill in all fields.';
-    } else {
-        $stmt = $db->prepare("SELECT * FROM students WHERE email = ? LIMIT 1");
-        $stmt->bind_param('s', $email);
-        $stmt->execute();
-        $student = $stmt->get_result()->fetch_assoc();
+    $loginErrors = [];
+    vAdd($loginErrors, vRequired($email, 'Email'));
+    vAdd($loginErrors, vEmail($email));
 
-        if ($student && password_verify($password, $student['password_hash'])) {
-            if (!$student['is_active']) {
-                $error = 'Your account is deactivated. Please contact support.';
-            } else {
-                linkGuestRegistrations((int) $student['student_id'], $student['email']);
-                loginStudent($student);
-                redirect('/student');
-            }
+    if ($loginErrors) {
+        $error = implode(' ', $loginErrors);
+    } else {
+        $bucket = throttleBucketFor($email);
+
+        if ($throttleMessage = enforceLoginThrottle($bucket, 'sign-in')) {
+            $error = $throttleMessage;
         } else {
-            $error = 'Invalid email or password.';
+            $stmt = $db->prepare("SELECT * FROM students WHERE email = ? LIMIT 1");
+            $stmt->bind_param('s', $email);
+            $stmt->execute();
+            $student = $stmt->get_result()->fetch_assoc();
+
+            if ($student && password_verify($password, $student['password_hash'])) {
+                clearLoginFailures($bucket);
+
+                if (!$student['is_active']) {
+                    $error = 'Your account is deactivated. Please contact support.';
+                } else {
+                    linkGuestRegistrations((int) $student['student_id'], $student['email']);
+                    loginStudent($student);
+                    redirect('/student');
+                }
+            } else {
+                recordLoginFailure($bucket);
+                $remaining = max(0, 5 - loginThrottleState($bucket)['count']);
+                $error = $remaining > 0
+                    ? 'Invalid email or password. ' . $remaining . ' attempt' . ($remaining === 1 ? '' : 's') . ' left before a short pause.'
+                    : 'Invalid email or password. Too many attempts — please wait a moment and try again.';
+            }
         }
     }
 }
@@ -74,6 +90,7 @@ $pageTitle = 'Log In';
             <?php endif; ?>
 
             <form method="POST" action="<?= url('/login') ?>" class="space-y-4">
+                <?= csrfField() ?>
                 <div class="form-group">
                     <label for="email" class="label">University Email</label>
                     <input type="email" id="email" name="email" class="input" placeholder="your.name@university.edu" value="<?= e(post('email')) ?>" required autocomplete="username">

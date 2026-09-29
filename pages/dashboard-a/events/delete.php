@@ -11,7 +11,7 @@ if (isPost()) {
     $stmt = $db->prepare("DELETE FROM events WHERE event_id = ?");
     $stmt->bind_param('i', $eventId);
 
-    if ($stmt->execute()) {
+    if (dbExec($stmt)) {
         $_SESSION['flash']['success'] = 'Event deleted successfully.';
     } else {
         $_SESSION['flash']['error'] = 'Failed to delete event.';

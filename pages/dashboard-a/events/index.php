@@ -68,7 +68,8 @@ $rows = [];
 foreach ($events as $event) {
     $actions = '<div class="flex items-center justify-end gap-2">'
     . '<a href="' . e(url('/event?event_id=' . $event['event_id'])) . '" class="btn-ghost btn-sm">View</a>'
-    . '<form method="POST" action="' . e(url('/admin/events/delete')) . '" onsubmit="return confirm(\'Are you sure you want to delete this event? This cannot be undone.\');">'
+    . '<form method="POST" action="' . e(url('/admin/events/delete')) . '" onsubmit="return confirm(\'Are you sure you want to delete this event? This cannot be undone.\');">
+<?= csrfField() ?>'
     . '<input type="hidden" name="event_id" value="' . (int) $event['event_id'] . '">'
     . '<button type="submit" class="btn-ghost btn-sm text-red-600 hover:text-red-700">Delete</button>'
     . '</form>'

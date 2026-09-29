@@ -29,3 +29,21 @@ function db(): mysqli
     global $db;
     return $db;
 }
+
+/**
+ * Run a prepared statement, reporting failure as false instead of throwing.
+ *
+ * mysqli is in exception mode, so a bare `$stmt->execute()` aborts the request
+ * with a 500 on any constraint violation. Callers that already branch on the
+ * result should use this so the user sees their "please try again" message.
+ */
+function dbExec(mysqli_stmt $stmt): bool
+{
+    try {
+        return $stmt->execute();
+    } catch (mysqli_sql_exception $e) {
+        error_log('SQL execute failed: ' . $e->getMessage());
+
+        return false;
+    }
+}
